@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        Width="800" Height="600"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HostsManager.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="HostsManager.Views.MainWindow"
+        x:Name="MainWindow"
+        Icon="/Assets/avalonia-logo.ico"
+        WindowStartupLocation="CenterScreen"
+        Title="HostsManager">
+
+        <NativeMenu.Menu> <!-- Begin OSX Menus -->
+            <NativeMenu>
+                <NativeMenuItem Header="File">
+                    <NativeMenu>
+                        <NativeMenuItem Header="Open" Clicked="OnOpenClicked" Gesture="Ctrl+O"/>
+                        <NativeMenuItem Header="Save" Clicked="OnSaveClicked" Gesture="Ctrl+S"/>
+                        <NativeMenuItemSeperator/>
+                        <NativeMenuItem Header="Recent">
+                            <NativeMenu/>
+                        </NativeMenuItem>
+                        <NativeMenuItemSeperator/>
+                        <NativeMenuItem Header="Quit HostsManager"
+                                        Gesture="Ctrl+Q"
+                                        Clicked="OnCloseClicked" />
+                    </NativeMenu>
+                </NativeMenuItem>
+                <NativeMenuItem Header="Edit">
+                    <NativeMenu>
+                        <NativeMenuItem Header="Cut"/>
+                        <NativeMenuItem Header="Copy"/>
+                        <NativeMenuItem Header="Paste"/>
+                    </NativeMenu>
+                </NativeMenuItem>
+                <NativeMenuItem Header="Help">
+                    <NativeMenu>
+                        <NativeMenuItem Header="About"/>
+                    </NativeMenu>
+                </NativeMenuItem>
+            </NativeMenu>
+        </NativeMenu.Menu> <!-- End OSX Menus -->
+
+    <!-- Window.Styles>
+        <Window DataContext="{Binding Main, Source={StaticResource Locator}}"
+        <Style Selector="TitleBar:fullscreen">
+            <Setter Property="Background" Value="#00000000" />
+        </Style>
+    </Window.Styles -->
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <DockPanel>
+        <Menu Name="MainMenu" DockPanel.Dock="Top">
+            <MenuItem Header="File">
+            <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
+
+                <!--
+                <MenuItem Header="_Open" Command="{Binding MenuCommand}" CommandParameter="Open" />
+                <MenuItem Header="_Save" Command="{Binding MenuCommand}" CommandParameter="Save" />
+                <Separator />
+                <MenuItem Header="E_xit" Command="{Binding MenuCommand}" CommandParameter="Exit" />
+                 -->
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="Cut" Command="{Binding MenuCommand}" CommandParameter="Cut" />
+                <MenuItem Header="Copy" Command="{Binding MenuCommand}" CommandParameter="Copy" />
+                <MenuItem Header="Paste" Command="{Binding MenuCommand}" CommandParameter="Paste" />
+            </MenuItem>
+          <MenuItem Header="Help">
+            <MenuItem Header="About" Command="{Binding AboutCommand}" />
+          </MenuItem>
+        </Menu>
+        <!-- local:MainView / -->
+        <TextBox Background="Black" Text="{Binding Greeting}" Name="hostsResult" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Watermark="Hosts File here..." TextWrapping="Wrap" /><!-- Foreground="White" / -->
+    </DockPanel>
+</Window>

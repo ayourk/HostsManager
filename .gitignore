@@ -30,14 +30,18 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+core
 
 # Visual Studio 2015/2017 cache/options directory
+.idea/
+.vscode/
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
 # Visual Studio 2017 auto generated files
 Generated\ Files/
+FodyWeavers.xsd
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
