@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import scrolledtext as st
+#from style import *
 import sqlite3
 
 root = Tk()
@@ -64,21 +65,20 @@ mnuEdit.add_cascade(label="Cut", command=mnuEditCut)
 mnuEdit.add_cascade(label="Copy", command=mnuEditCopy)
 mnuEdit.add_cascade(label="Paste", command=mnuEditPaste)
 
-mainEditor = PanedWindow(bd=4, relief="sunken", bg="gray")
-
-hostsBox = st.ScrolledText(root, wrap="word") #, anchor="nsew")
-hostsBox.pack() #anchor="center")
-
-
-
-
-
-
-
+#
+# Main editor window
+#
+hostsBox = st.ScrolledText(root, wrap="word", bg="black", fg="white")
+#hostsBox.pack needs to be added AFTER StatusBar is added
 
 # Status bar (label)
-statusBar = Label(root, text="Status Bar", padx=5, pady=5, bd=1, relief=SUNKEN)
-statusBar.pack(anchor=S)
+statusBarRoot = Label(root, relief=SUNKEN)
+statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBar.grid(column=0, row=0)
+statusBar2 = Label(statusBarRoot, text="Status Bar2", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBar2.grid(column=1, row=0, padx=1, sticky=W+E)
+statusBarRoot.pack(side=BOTTOM, fill=X)
+hostsBox.pack(expand=TRUE, fill=BOTH) # Needs to be added last for proper layout behavior
 
 sqdb.commit()
 sqdb.close()
