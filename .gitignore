@@ -46,6 +46,7 @@ FodyWeavers.xsd
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
+hosts.db
 
 # NUnit
 *.VisualState.xml
