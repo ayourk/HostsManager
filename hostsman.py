@@ -2,6 +2,7 @@
 #%%
 import platform
 from tkinter import *
+from tkinter import colorchooser
 from tkinter import filedialog
 from tkinter import font
 from tkinter import messagebox
@@ -50,7 +51,7 @@ init_dir = ""
 selected_text = ""
 
 # Menu and related functions
-def mnuFileNew():
+def mnuFileNew(e):
     global fileUnsavedChanges, fileMainFilename
     if fileUnsavedChanges:
         quitMsg = "You have UNSAVED changes, are you sure you want to erase everything?"
@@ -81,8 +82,8 @@ def mnuFileOpenSys():
         fileUnsavedChanges = False
         statusBarFile.config(text=fileMainFilename)
 
-def mnuFileOpen():
-    global fileUnsavedChanges, fileMainFilename, init_dir
+def mnuFileOpen(e):
+    global fileUnsavedChanges, fileMainFilename
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
@@ -93,7 +94,7 @@ def mnuFileOpen():
     statusBarFile.config(text=fileMainFilename)
 
 def mnuFileMerge():
-    global fileUnsavedChanges, init_dir
+    global fileUnsavedChanges
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
@@ -101,24 +102,33 @@ def mnuFileMerge():
     editor_text.insert(END, hosts_contents)
     text_file.close()
     fileUnsavedChanges = True
-#    statusBarFile.config(text=fileMainFilename)
 
-def mnuFileSave():
+def mnuInsertFile(e):   # Resides under the Edit menu
+    global fileUnsavedChanges
+    fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Insert a file")
+    text_file = open(fileMainFilename, "r")
+    hosts_contents = text_file.read()
+    curpos = editor_text.index(INSERT)
+    editor_text.insert(curpos, hosts_contents)
+    text_file.close()
+    fileUnsavedChanges = True
+
+def mnuFileSave(e):
     global fileUnsavedChanges, fileMainFilename, init_dir
     if fileMainFilename == "":
         fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
     text_file = open(fileMainFilename, "w+")
     text_file.write(hostsBox.get(1.0, END))
     fileUnsavedChanges = False
-    statusBarFile.config(text=fileMainFilename)
+    statusBarFile.config(text=f"Saved: {fileMainFilename}")
 
 def mnuFileSaveAs():
-    global fileUnsavedChanges, fileMainFilename, init_dir
+    global fileUnsavedChanges, fileMainFilename
     fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
     text_file = open(fileMainFilename, "w+")
     text_file.write(hostsBox.get(1.0, END))
     fileUnsavedChanges = False
-    statusBarFile.config(text=fileMainFilename)
+    statusBarFile.config(text=f"Saved: {fileMainFilename}")
 
 def mnuFileRevert():
     global fileUnsavedChanges, fileMainFilename, init_dir
@@ -142,29 +152,47 @@ def mnuFileExit():
         root.quit()
     # Exit app
 
-def mnuEditUndo():
+def mnuEditUndo(e):
     hostsBox.edit_undo()
 
-def mnuEditRedo():
+def mnuEditRedo(e):
     hostsBox.edit_redo()
 
-def mnuEditCut():
-    pass
-
-def mnuEditCopy():
+def mnuEditCut(e):
     global selected_text
-    selected_text = hostsBox.selection_get()
+    if e:
+        selected_text = root.clipboard_get()
+    elif editor_text.selection_get():
+        selected_text = editor_text.selection_get()
+        editor_text.delete("sel.first", "sel.last")
+        root.clipboard_clear()
+        root.clipboard_append(selected_text)
 
-def mnuEditPaste():
+def mnuEditCopy(e):
+    global selected_text
+    if e:
+        selected_text = root.clipboard_get()
+    if editor_text.selection_get():
+        selected_text = editor_text.selection_get()
+        root.clipboard_clear()
+        root.clipboard_append(selected_text)
+
+def mnuEditPaste(e):
+    global selected_text
+    curpos = editor_text.index(INSERT)
+    if e:
+        selected_text = root.clipboard_get()
+    elif selected_text:
+        editor_text.insert(curpos, selected_text)
+
+def mnuEditFind(e):
     pass
 
-def mnuEditFind():
+def mnuEditReplace(e):
     pass
 
-def mnuEditReplace():
-    pass
-
-def mnuSelectAll():
+def mnuSelectAll(e):
+    editor_text.tag_add("sel", "1.0", "end")
     pass
 
 def mnuHelpAbout():
@@ -208,30 +236,43 @@ rootMenu = Menu(root)
 root.config(menu=rootMenu)
 
 mnuFile = Menu(rootMenu, tearoff=False)
-rootMenu.add_cascade(label="File", menu=mnuFile)
-mnuFile.add_command(label="New", command=mnuFileNew)
+rootMenu.add_cascade(label="File", menu=mnuFile, accelerator="(Ctrl+N)")
+mnuFile.add_command(label="New", command=lambda: mnuFileNew(0), accelerator="(Ctrl+N)")
 mnuFile.add_command(label="Open System Hosts", command=mnuFileOpenSys)
-mnuFile.add_command(label="Open...", command=mnuFileOpen)
+mnuFile.add_command(label="Open...", command=lambda: mnuFileOpen(0), accelerator="(Ctrl+N)")
 mnuFile.add_command(label="Merge", command=mnuFileMerge)
-mnuFile.add_command(label="Save", command=mnuFileSave)
+mnuFile.add_command(label="Save", command=lambda: mnuFileSave(0), accelerator="(Ctrl+N)")
 mnuFile.add_command(label="Save As...", command=mnuFileSaveAs)
 mnuFile.add_command(label="Revert", command=mnuFileRevert)
 mnuFile.add_separator()
-mnuFile.add_command(label="Exit", command=mnuFileExit)
+mnuFile.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 mnuEdit = Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="Edit", menu=mnuEdit)
-mnuEdit.add_command(label="Undo", command=mnuEditUndo)
-mnuEdit.add_command(label="Redo", command=mnuEditRedo)
+mnuEdit.add_command(label="Undo", command=editor_text.edit_undo, accelerator="(Ctrl+Z)")
+mnuEdit.add_command(label="Redo", command=editor_text.edit_redo, accelerator="(Ctrl+Y)")
 mnuEdit.add_separator()
-mnuEdit.add_command(label="Select All", command=mnuSelectAll)
-mnuEdit.add_command(label="Cut", command=mnuEditCut)
-mnuEdit.add_command(label="Copy", command=mnuEditCopy)
-mnuEdit.add_command(label="Paste", command=mnuEditPaste)
+mnuEdit.add_command(label="Select All", command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
+mnuEdit.add_command(label="Insert File...", command=lambda: mnuInsertFile(0), accelerator="(Ctrl+I)")
+mnuEdit.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
+mnuEdit.add_command(label="Copy", command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
+mnuEdit.add_command(label="Paste", command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
 mnuEdit.add_separator()
-mnuEdit.add_command(label="Find...", command=mnuEditFind)
-mnuEdit.add_command(label="Replace...", command=mnuEditReplace)
+mnuEdit.add_command(label="Find...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
+mnuEdit.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
 
+# Main application key bindings:
+root.bind("<Control-Key-n>", mnuFileNew)
+root.bind("<Control-Key-o>", mnuFileOpen)
+root.bind("<Control-Key-s>", mnuFileSave)
+root.bind("<Control-Key-q>", mnuFileExit)
+#root.bind("<Control-Key-z>", mnuEditUndo)
+#root.bind("<Control-Key-y>", mnuEditRedo)
+root.bind("<Control-Key-a>", mnuSelectAll)
+root.bind("<Control-Key-i>", mnuInsertFile)
+root.bind("<Control-Key-x>", mnuEditCut)
+root.bind("<Control-Key-c>", mnuEditCopy)
+root.bind("<Control-Key-v>", mnuEditPaste)
 
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
