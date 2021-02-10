@@ -63,21 +63,26 @@ def mnuFileNew():
     editor_text.delete(1.0, END)
 
 def mnuFileOpenSys():
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     if hosts_file == "":
-        fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open System HOSTS")
+        response = messagebox.askyesno("HOSTS Not Found",
+            "Unable to find HOSTS file or detect Operating System\n\n" +
+            "Do you want to browse for the HOSTS file?")
+        if response == 1:
+            fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open System HOSTS")
     else:
         fileMainFilename = hosts_file
-    text_file = open(fileMainFilename, "r")
-    hosts_contents = text_file.read()
-    editor_text.delete(1.0, END)
-    editor_text.insert(END, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = False
-    statusBarFile.config(text=fileMainFilename)
+    if fileMainFilename != "":
+        text_file = open(fileMainFilename, "r")
+        hosts_contents = text_file.read()
+        editor_text.delete(1.0, END)
+        editor_text.insert(END, hosts_contents)
+        text_file.close()
+        fileUnsavedChanges = False
+        statusBarFile.config(text=fileMainFilename)
 
 def mnuFileOpen():
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
@@ -88,7 +93,7 @@ def mnuFileOpen():
     statusBarFile.config(text=fileMainFilename)
 
 def mnuFileMerge():
-    global fileUnsavedChanges
+    global fileUnsavedChanges, init_dir
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
@@ -99,7 +104,7 @@ def mnuFileMerge():
 #    statusBarFile.config(text=fileMainFilename)
 
 def mnuFileSave():
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     if fileMainFilename == "":
         fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
     text_file = open(fileMainFilename, "w+")
@@ -108,7 +113,7 @@ def mnuFileSave():
     statusBarFile.config(text=fileMainFilename)
 
 def mnuFileSaveAs():
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
     text_file = open(fileMainFilename, "w+")
     text_file.write(hostsBox.get(1.0, END))
@@ -116,7 +121,7 @@ def mnuFileSaveAs():
     statusBarFile.config(text=fileMainFilename)
 
 def mnuFileRevert():
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     if fileMainFilename == "":
         fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
     text_file = open(fileMainFilename, "r+")
