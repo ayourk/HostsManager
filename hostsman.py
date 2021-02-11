@@ -22,6 +22,17 @@ import threading
 #
 #
 
+# TODO: 
+#        Handle Read/Write file exceptions
+#        Detect when editor_text.get() changes
+#        Detect when the cursor position changes in editor_text
+#        Allow editor themeing with foreground/background colors (Proper Dark Mode)
+#           Figure out how to change the flashing cursor color
+#        Finish special dialogs related to the purpose of this app
+#           Make the Maximize and Minimize buttons disappear
+#           Make the dialogs modal
+#        Perform the backend logic on editor_text with said dialogs
+
 root = Tk()
 root.title("Hosts File Manager")
 #root.iconbitmap("/path/to/file.ico")
@@ -35,6 +46,7 @@ app_left = int((screen_height - app_height) / 2)
 root.geometry(f"{app_width}x{app_height}+{app_top}+{app_left}")
 
 
+# Utility functions
 def detectHosts():
     # 'Linux', 'Darwin', 'Java', 'Windows'
     global hosts_path, hosts_file, path_slash, init_dir
@@ -59,6 +71,18 @@ def detectHosts():
             pass
     init_dir = hosts_path
 
+def center_window(curwind, dlg_width=200, dlg_height=200):
+    # This needs refactoring since it doesn't work quite right for systems with 2+ screens
+    global screen_width, screen_height, app_top, app_left, app_width, app_height
+    dlg_top = int((screen_width - dlg_width) / 2)
+    dlg_left = int((screen_height - dlg_height) / 2)
+    curwind.geometry(f"{dlg_width}x{dlg_height}+{dlg_top}+{dlg_left}")
+
+def dlgDismiss(dlgWindow):
+    dlgWindow.grab_release()
+    dlgWindow.destroy()
+
+
 # File menu globals
 init_dir = ""
 hosts_path = ""
@@ -68,6 +92,7 @@ fileMainFilename = ""
 fileUnsavedChanges = False
 # Edit menu globals
 selected_text = ""
+selected_font = ""
 # Dialog box globals; https://www.youtube.com/watch?v=tpwu5Zb64lQ
 dlgFileMerge = False
 dlgEditFind = False
@@ -77,7 +102,6 @@ dlgToolFilter = False
 dlgToolTheme = False
 dlgToolOptions = False
 dlgHelpAbout = False
-#dlgRightClick = False
 
 # Menu and related functions
 def mnuFileNew(e):
@@ -126,6 +150,17 @@ def mnuFileOpen(e):
 def mnuFileMerge():
     global fileUnsavedChanges
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
+    text_file = open(fileMainFilename, "r+")
+    hosts_contents = text_file.read()
+    editor_text.insert(END, "\r\n")
+    editor_text.insert(END, hosts_contents)
+    text_file.close()
+    fileUnsavedChanges = True
+
+def mnuFileMerge2():    # Custom dialog version (TODO)
+    global fileUnsavedChanges
+    center_window(dlgFileMerge)
+    #fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
     editor_text.insert(END, "\r\n")
@@ -228,28 +263,34 @@ def mnuEditFind(e):
     global dlgEditFind
     dlgEditFind = Toplevel(root)
     dlgEditFind.title("Find Text...")
-    dlgEditFind.geometry("200x100")
+    center_window(dlgEditFind, 200, 100)
+    dlgEditFind.protocol("WM_DELETE_WINDOW", lambda: dlgDismiss(dlgEditFind)) # intercept close button
+    dlgEditFind.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons
+    dlgEditFind.wait_visibility() # can't grab until window appears, so we wait
+    dlgEditFind.grab_set()        # ensure all input goes to our window
+    dlgEditFind.wait_window()     # block until window is destroyed
 def mnuEditFindNext():
     global dlgEditFind
-    dlgEditFind.destroy()
+    dlgDismiss(dlgEditFind)
 def mnuEditFindCancel():
     global dlgEditFind
-    dlgEditFind.destroy()
+    dlgDismiss(dlgEditFind)
 
 def mnuEditReplace(e):
     global dlgEditReplace
     dlgEditReplace = Toplevel(root)
     dlgEditReplace.title("Find & Replace Text...")
-    dlgEditReplace.geometry("200x150")
+    center_window(dlgEditReplace, 200, 150)
 def mnuEditReplaceSkip():
     global dlgEditReplace
-    dlgEditReplace.destroy()
+    dlgDismiss(dlgEditReplace)
 def mnuEditReplaceNext():
     global dlgEditReplace
-    dlgEditReplace.destroy()
+    dlgDismiss(dlgEditReplace)
 def mnuEditReplaceCancel():
     global dlgEditReplace
-    dlgEditReplace.destroy()
+    dlgDismiss(dlgEditReplace)
 
 def mnuSelectAll(e):
     editor_text.tag_add("sel", "1.0", "end")
@@ -258,58 +299,93 @@ def mnuToolSort():
     global dlgToolSort
     dlgToolSort = Toplevel(root)
     dlgToolSort.title("Sort Hosts")
-    dlgToolSort.geometry("300x250")
-    #dlgToolSort.destroy()
+    center_window(dlgToolSort, 300, 250)
+    #dlgDismiss(dlgToolSort)
 
 def mnuToolFilter():
     global dlgToolFilter
     dlgToolFilter = Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
-    dlgToolFilter.geometry("300x250")
-    #dlgToolFilter.destroy()
+    center_window(dlgToolFilter, 300, 250)
+    #dlgDismiss(dlgToolFilter)
+
+def mnuToolWrap():
+    # TODO: Allow switching between none, char, word
+    pass
+
+def fontChanged(curfont):
+    editor_text.config(font=curfont)
+def mnuToolFont():
+    # Tkinter has not yet added a convenient way to use this font dialog,
+    # so I have to use the Tcl API directly. You can see the latest work
+    # towards a proper Python API and download code at [Issue#28694].
+    # On macOS, if you don't provide a font via the font configuration option,
+    # your callbacks won't be invoked so always provide an initial font
+    curfont = editor_text["font"]
+    root.tk.call('tk', 'fontchooser', 'configure', '-font', f"{curfont} 10", '-command', root.register(fontChanged))
+    root.tk.call('tk', 'fontchooser', 'show')
 
 def mnuToolTheme():
     global dlgToolTheme
     dlgToolTheme = Toplevel(root)
     dlgToolTheme.title("Editor Theme")
-    dlgToolTheme.geometry("300x250")
-    #dlgToolSort.destroy()
+    center_window(dlgToolTheme, 300, 250)
+    #dlgDismiss(dlgToolSort)
 
 def mnuToolOptions():
     global dlgToolOptions
     dlgToolOptions = Toplevel(root)
     dlgToolOptions.title("Find & Replace Text...")
-    dlgToolOptions.geometry("300x500")
+    center_window(dlgToolOptions, 300, 500)
     #dlgToolOptions.resizeable(width=False, height=False)
     #dlgToolOptions.overrideredirect(True)
-    #dlgToolOptions.destroy()
+    #dlgDismiss(dlgToolOptions)
 
 def mnuHelpAbout():
-    messagebox.showinfo("About", "This program is designed to help merge multiple HOSTS files.")
+    messagebox.showinfo("About", "This program is a text editor designed to help merge multiple HOSTS files together.")
 
 def rightClickMenu(e):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
 
+def editorUpdate(e):    # Check to see if there are unsaved changes
+    global statusBar
+    # Update status bar with cursor position
+    statusBarCursor.config(text=editor_text.index(INSERT))
+    # Regardless of e.state, editor_text changes
+    if e.keysym == "Return":
+        pass
+    # If we are at the start of the buffer and BackSpace is pressed, no change is made
+    if e.keysym == "BackSpace" and editor_text.index(INSERT) == 1.0:
+        pass
+    # If we are at the end of the buffer and Delete is pressed, no change is made
+    # "KP_Delete" registers as "Delete" when numlock is off or shift is pressed and numlock is on
+    # (Num_Lock == ON && KP_Decimal) == Delete == (Num_Lock == OFF && KP_Delete)
+    if e.keysym == "Delete" and editor_text.index(INSERT) == 1.0:
+        pass
+    statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
 
 # I'm Considering storing HOSTS entries in a DB or CSV
 #sqdb = sqlite3.connect("hosts.db")
 #sqcur = sqdb.cursor()
 
 
+# Font info:  .metrics("fixed") == 1 - Fixed with fonts only
+
 #
 # Main editor window
 #
 # Scrolling issues: https://www.youtube.com/watch?v=0WafQCaok6g
 editor_frame = Frame(root)
-vert_scroll = Scrollbar(editor_frame)
+vert_scroll = Scrollbar(editor_frame, takefocus=0)  # Scroll bars should NOT be part of the tab order
 vert_scroll.pack(side=RIGHT, fill=Y)
-horiz_scroll = Scrollbar(editor_frame, orient="horizontal")
+horiz_scroll = Scrollbar(editor_frame, takefocus=0, orient="horizontal")
 horiz_scroll.pack(side=BOTTOM, fill=X)
 editor_text = Text(editor_frame, width=20, height=20, wrap="none", undo=True,
 # bg="black", fg="white",
     selectbackground="yellow", xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
 
 editor_text.bind("<Button-3>", rightClickMenu)
+editor_text.bind("<KeyRelease>", editorUpdate)
 # Any time the cursor moves in the text box, set the cursor pos in the status bar:
 #editor_text.bind("<Configure>", statusBarCursor.config(text=editor_text.index(INSERT))) # Doesn't work yet
 #editor_text.pack needs to be added AFTER StatusBar is added
@@ -354,6 +430,8 @@ mnuTool = Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="Tools", menu=mnuTool)
 mnuTool.add_command(label="Sort Hosts", command=mnuToolSort)
 mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
+mnuTool.add_command(label="Text Wrap", command=mnuToolWrap) # Radio between [none, char, word]
+mnuTool.add_command(label="Text Font", command=mnuToolFont) # blockcursor= ?
 mnuTool.add_command(label="Editor Theme", command=mnuToolTheme)
 mnuTool.add_command(label="Options...", command=mnuToolOptions)
 
@@ -374,22 +452,40 @@ mnuRightClick.add_separator()
 mnuRightClick.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 # By default, some menu items don't make sense to have enabled when the editor_text is empty
-def mnuDisableWhenEmpty():
+def mnuDisableWhenEmpty(firstRun):
     global mnuFile, mnuEdit, mnuTool
     mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
     mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
+    if firstRun:
+        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
     mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
-    mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
+    if firstRun:
+        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
+        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
     mnuEdit.entryconfig("Cut", state="disabled")        # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Copy", state="disabled")       # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Find...", state="disabled")    # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Replace...", state="disabled") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Sort Hosts", state="disabled") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
+
+def mnuEnable(fileOpened):
+    global mnuFile, mnuEdit, mnuTool
+    mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
+    if fileOpened:
+        mnuFile.entryconfig("Merge", state="normal")      # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
+    mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Cut", state="normal")        # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Copy", state="normal")       # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Find...", state="normal")    # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Replace...", state="normal") # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Sort Hosts", state="normal") # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
 
 # Main application key bindings:
 root.bind("<Control-Key-n>", mnuFileNew)
@@ -409,12 +505,14 @@ root.bind("<Control-Key-h>", mnuEditReplace)
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
 Grid.columnconfigure(statusBarRoot, 1, weight=1) # Make at least 1 status bar field expand
-statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBar.grid(column=0, row=0, sticky=W+E)
+statusBarCursor = Label(statusBarRoot, text="Coord", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBarCursor.grid(column=0, row=0, padx=1, sticky=W+E)
 statusBarFile = Label(statusBarRoot, text="CurrentFilename", padx=5, pady=3, bd=1, relief=SUNKEN)
 statusBarFile.grid(column=1, row=0, padx=1, sticky=W+E)
-statusBarCursor = Label(statusBarRoot, text="Coord", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBarCursor.grid(column=2, row=0, padx=1, sticky=W+E)
+# Maybe add another status indicator containing a progress bar for file Open/Save?
+statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBar.grid(column=2, row=0, sticky=W+E)
+#statusBarCursor.config(textvariable=editor_text.index(INSERT)) # Testing stuff
 
 # Now we can add the status bar
 statusBarRoot.pack(side=BOTTOM, fill=X)
@@ -425,9 +523,10 @@ editor_frame.pack(expand=TRUE, fill=BOTH)
 
 # Now we get to the meat and potatoes!
 detectHosts()
-#mnuDisableWhenEmpty()
+#mnuDisableWhenEmpty(True)
 
 editor_text.focus()
+#editor_text.insert(END, font.families())
 root.mainloop()
 
 # Message boxes
