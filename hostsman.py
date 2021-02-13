@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 
 #%% <-- For Jupyter debugging
 import platform
+import re
 from tkinter import *
 from tkinter import colorchooser
 from tkinter import filedialog
@@ -10,6 +11,7 @@ from tkinter.font import Font # https://www.youtube.com/watch?v=JIqE3RMCMFE
 from tkinter import messagebox
 #from tkinter import scrolledtext as st
 from tkinter import ttk
+#from ttkthemes import ThemedTk, THEMES
 #from style import *
 #import sqlite3
 import threading
@@ -24,16 +26,16 @@ import threading
 
 # TODO: 
 #        Handle Read/Write file exceptions
-#        Detect when editor_text.get() changes
-#        Detect when the cursor position changes in editor_text
-#        Allow editor themeing with foreground/background colors (Proper Dark Mode)
-#           Figure out how to change the flashing cursor color
+#        Detect when editor_text.get() changes (partially done)
+#        Detect when the cursor position changes in editor_text (partially done)
 #        Finish special dialogs related to the purpose of this app
-#           Make the Maximize and Minimize buttons disappear
-#           Make the dialogs modal
+#           Make the Minimize button disappear
 #        Perform the backend logic on editor_text with said dialogs
+#        Finish backend functionality for many of the dialogs
+#           Flesh out Sort, Filter, Options dialogs
 
 root = Tk()
+#root = ThemedTk()
 root.title("Hosts File Manager")
 #root.iconbitmap("/path/to/file.ico")
 
@@ -61,14 +63,18 @@ def detectHosts():
         path_slash = "\\"
         # The Windows registry is the authoritative source for the location of the HOSTS file.
         try:
-            hkey = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-            subkey = winreg.OpenKey(hkey, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters")
-            kval = winreg.QueryValueEx(subkey, "DataBasePath")[0]
-            hosts_path = winreg.ExpandEnvironmentStrings(kval)
+            import winreg
+            hivekey = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+            subkey = winreg.OpenKey(hivekey, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters")
+            keyval = winreg.QueryValueEx(subkey, "DataBasePath")[0]
+            hosts_path = winreg.ExpandEnvironmentStrings(keyval)
             hosts_file = hosts_path + r"\HOSTS"
-            hkey.Close()
-        except:
-            pass
+            hivekey.Close()
+        except:  
+            # If there is any reason for the above code block to fail
+            # fallback to the standard default location and path
+            hosts_path = r"C:\Windows\System32\drivers\etc"
+            hosts_file = hosts_path + r"\HOSTS"
     init_dir = hosts_path
 
 def center_window(curwind, dlg_width=200, dlg_height=200):
@@ -99,7 +105,7 @@ dlgEditFind = False
 dlgEditReplace = False
 dlgToolSort = False
 dlgToolFilter = False
-dlgToolTheme = False
+dlgToolColor = False
 dlgToolOptions = False
 dlgHelpAbout = False
 
@@ -183,7 +189,7 @@ def mnuFileSave(e):
     if fileMainFilename == "":
         fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
     text_file = open(fileMainFilename, "w+")
-    text_file.write(hostsBox.get(1.0, END))
+    text_file.write(editor_text.get(1.0, END))
     fileUnsavedChanges = False
     statusBarFile.config(text=f"Saved: {fileMainFilename}")
 
@@ -191,7 +197,7 @@ def mnuFileSaveAs():
     global fileUnsavedChanges, fileMainFilename
     fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save File As...")
     text_file = open(fileMainFilename, "w+")
-    text_file.write(hostsBox.get(1.0, END))
+    text_file.write(editor_text.get(1.0, END))
     fileUnsavedChanges = False
     statusBarFile.config(text=f"Saved As: {fileMainFilename}")
 
@@ -225,12 +231,12 @@ def mnuFileExit(e):
 def mnuEditUndo(e):
     mnuEdit.entryconfig("Undo", state="disabled")
     mnuEdit.entryconfig("Redo", state="normal")
-    hostsBox.edit_undo()
+    editor_text.edit_undo()
 
 def mnuEditRedo(e):
     mnuEdit.entryconfig("Undo", state="normal")
     mnuEdit.entryconfig("Redo", state="disabled")
-    hostsBox.edit_redo()
+    editor_text.edit_redo()
 
 def mnuEditCut(e):
     global selected_text
@@ -263,16 +269,40 @@ def mnuEditFind(e):
     global dlgEditFind
     dlgEditFind = Toplevel(root)
     dlgEditFind.title("Find Text...")
-    center_window(dlgEditFind, 200, 100)
-    dlgEditFind.protocol("WM_DELETE_WINDOW", lambda: dlgDismiss(dlgEditFind)) # intercept close button
+    center_window(dlgEditFind, 255, 85)
+    lblFind = Label(dlgEditFind, text="Find:")
+    lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=E)
+    txtFind = Entry(dlgEditFind)
+    txtFind.grid(column=1, row=0, columnspan=2, pady=10)
+    btnEditFindNext = Button(dlgEditFind, text="Find Next", command=lambda: mnuEditFindNext(txtFind.get()))
+    btnEditFindNext.grid(column=1, row=1, sticky=W)
+    btnEditFindCancel = Button(dlgEditFind, text="Cancel", command=mnuEditFindCancel)
+    btnEditFindCancel.grid(column=2, row=1, sticky=E)
+    txtFind.focus()
+    dlgEditFind.resizable(False, False)
+    #dlgEditFind.attributes('-toolwindow', True)
+    #dlgEditFind.overrideredirect(True)
+    dlgEditFind.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgEditFind)) # intercept close button
     dlgEditFind.transient(root)   # dialog window is related to main
-    # Still need to remove min/max buttons
+    # Still need to remove min/max buttons and keep the X button
     dlgEditFind.wait_visibility() # can't grab until window appears, so we wait
     dlgEditFind.grab_set()        # ensure all input goes to our window
     dlgEditFind.wait_window()     # block until window is destroyed
-def mnuEditFindNext():
-    global dlgEditFind
-    dlgDismiss(dlgEditFind)
+def mnuEditFindNext(searchstr):
+    global dlgEditFind, editor_text
+    #editor_text.insert(END, dlgEditFind.children.get("Find Next"))
+    curpos = editor_text.index(INSERT)
+    text_file = editor_text.get(1.0, END)
+    #posFound = text_file.find(searchstr, int(curpos))
+    #if (posFound == -1):
+    #    return      # Not found
+    #editor_text.tag_add("sel", str(posFound))
+    #print(posFound)
+
+    # Search for the text in txtFind.get() and highlight the first instance
+    # starting from editor_text.index(INSERT)
+    #dlgDismiss(dlgEditFind)
 def mnuEditFindCancel():
     global dlgEditFind
     dlgDismiss(dlgEditFind)
@@ -281,7 +311,35 @@ def mnuEditReplace(e):
     global dlgEditReplace
     dlgEditReplace = Toplevel(root)
     dlgEditReplace.title("Find & Replace Text...")
-    center_window(dlgEditReplace, 200, 150)
+    center_window(dlgEditReplace, 285, 125)
+    lblFindR = Label(dlgEditReplace, text="Find:")
+    lblFindR.grid(column=0, row=0, padx=10, pady=10, sticky=E)
+    txtFindR = Entry(dlgEditReplace)
+    txtFindR.grid(column=1, row=0, columnspan=2, pady=10)
+    lblReplace = Label(dlgEditReplace, text="Replace:")
+    lblReplace.grid(column=0, row=1, padx=10, pady=5)
+    txtReplace = Entry(dlgEditReplace)
+    txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=E)
+    btnReplaceSkip = Button(dlgEditReplace, text="Skip", command=lambda:
+        mnuEditReplaceNext(txtFindR.get()))
+    btnReplaceSkip.grid(column=0, row=2)
+    btnEditReplaceNext = Button(dlgEditReplace, text="Replace",
+        command=mnuEditReplaceNext)
+    btnEditReplaceNext.grid(column=1, row=2, pady=5, sticky=W)
+    btnEditReplaceCancel = Button(dlgEditReplace, text="Cancel",
+        command=mnuEditReplaceCancel)
+    btnEditReplaceCancel.grid(column=2, row=2, pady=5, sticky=E)
+    txtFindR.focus()
+    dlgEditReplace.resizable(False, False)
+    #dlgEditReplace.attributes('-toolwindow', True)
+    #dlgEditReplace.overrideredirect(True)
+    dlgEditReplace.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgEditReplace)) # intercept close button
+    dlgEditReplace.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgEditReplace.wait_visibility() # can't grab until window appears, so we wait
+    dlgEditReplace.grab_set()        # ensure all input goes to our window
+    dlgEditReplace.wait_window()     # block until window is destroyed
 def mnuEditReplaceSkip():
     global dlgEditReplace
     dlgDismiss(dlgEditReplace)
@@ -299,15 +357,37 @@ def mnuToolSort():
     global dlgToolSort
     dlgToolSort = Toplevel(root)
     dlgToolSort.title("Sort Hosts")
-    center_window(dlgToolSort, 300, 250)
-    #dlgDismiss(dlgToolSort)
+    center_window(dlgToolSort, 300, 500)
+
+    #txtFindR.focus()
+    #dlgToolSort.resizable(False, False)
+    #dlgToolSort.attributes('-toolwindow', True)
+    #dlgToolSort.overrideredirect(True)
+    dlgToolSort.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgToolSort)) # intercept close button
+    dlgToolSort.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgToolSort.wait_visibility() # can't grab until window appears, so we wait
+    dlgToolSort.grab_set()        # ensure all input goes to our window
+    dlgToolSort.wait_window()     # block until window is destroyed
 
 def mnuToolFilter():
     global dlgToolFilter
     dlgToolFilter = Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
     center_window(dlgToolFilter, 300, 250)
-    #dlgDismiss(dlgToolFilter)
+
+    #txtFindR.focus()
+    #dlgToolFilter.resizable(False, False)
+    #dlgToolFilter.attributes('-toolwindow', True)
+    #dlgToolFilter.overrideredirect(True)
+    dlgToolFilter.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgToolFilter)) # intercept close button
+    dlgToolFilter.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgToolFilter.wait_visibility() # can't grab until window appears, so we wait
+    dlgToolFilter.grab_set()        # ensure all input goes to our window
+    dlgToolFilter.wait_window()     # block until window is destroyed
 
 def mnuToolWrap():
     # TODO: Allow switching between none, char, word
@@ -322,24 +402,84 @@ def mnuToolFont():
     # On macOS, if you don't provide a font via the font configuration option,
     # your callbacks won't be invoked so always provide an initial font
     curfont = editor_text["font"]
-    root.tk.call('tk', 'fontchooser', 'configure', '-font', f"{curfont} 10", '-command', root.register(fontChanged))
+    dlgToolFont = root.tk.call('tk', 'fontchooser', 'configure',
+        '-font', f"{curfont} 10", '-command', root.register(fontChanged))
     root.tk.call('tk', 'fontchooser', 'show')
 
-def mnuToolTheme():
-    global dlgToolTheme
-    dlgToolTheme = Toplevel(root)
-    dlgToolTheme.title("Editor Theme")
-    center_window(dlgToolTheme, 300, 250)
-    #dlgDismiss(dlgToolSort)
+def dlgColorChange(self, editcolor):
+    # https://www.youtube.com/watch?v=NDCirUTTrhg
+    newcolor = colorchooser.askcolor(initialcolor=editor_text[editcolor])[1]
+    if newcolor == None:
+        pass
+    else:
+        self.config(bg=newcolor, activebackground=newcolor)
+        editor_text[editcolor] = newcolor
+def mnuToolColor():
+    global dlgToolColor
+    dlgToolColor = Toplevel(root)
+    dlgToolColor.title("Editor Colors")
+    center_window(dlgToolColor, 250, 260)
+    # insertbackground needs to equal fg
+    # colorchooser.askcolor(initialcolor='#ff0000')
+    lblColorColorFg = Label(dlgToolColor, text="Foreground Color:")
+    lblColorColorBg = Label(dlgToolColor, text="Background Color:")
+    btnColorColorFg = Button(dlgToolColor, width=5,
+        activebackground=editor_text["fg"], bg=editor_text["fg"],
+        command=lambda: dlgColorChange(btnColorColorFg, "fg"))
+    btnColorColorBg = Button(dlgToolColor, width=5,
+        activebackground=editor_text["bg"], bg=editor_text["bg"],
+        command=lambda: dlgColorChange(btnColorColorBg, "bg"))
+    lblColorCursorBg = Label(dlgToolColor, text="Cursor BG Color:")
+    btnColorCursorBg = Button(dlgToolColor, width=5,
+        activebackground=editor_text["insertbackground"], bg=editor_text["insertbackground"],
+        command=lambda: dlgColorChange(btnColorCursorBg, "insertbackground"))
+    lblColorHiliteFg = Label(dlgToolColor, text="Highlight FG Color:")
+    lblColorHiliteBg = Label(dlgToolColor, text="Highlight BG Color:")
+    btnColorHiliteFg = Button(dlgToolColor, width=5,
+        activebackground=editor_text["selectforeground"], bg=editor_text["selectforeground"],
+        command=lambda: dlgColorChange(btnColorHiliteFg, "selectforeground"))
+    btnColorHiliteBg = Button(dlgToolColor, width=5,
+        activebackground=editor_text["selectbackground"], bg=editor_text["selectbackground"],
+        command=lambda: dlgColorChange(btnColorHiliteBg, "selectbackground"))
+    lblColorColorFg.grid(column=0, row=0, padx=(10,5), pady=10, sticky=E)
+    lblColorColorBg.grid(column=0, row=1, padx=(10,5), pady=10, sticky=E)
+    lblColorCursorBg.grid(column=0, row=3, padx=(10,5), pady=10, sticky=E)
+    lblColorHiliteFg.grid(column=0, row=4, padx=(10,5), pady=10, sticky=E)
+    lblColorHiliteBg.grid(column=0, row=5, padx=(10,5), pady=10, sticky=E)
+    btnColorColorFg.grid(column=1, row=0, padx=(5,10), pady=10, sticky=W)
+    btnColorColorBg.grid(column=1, row=1, padx=(5,10), pady=10, sticky=W)
+    btnColorCursorBg.grid(column=1, row=3, padx=(5,10), pady=10, sticky=W)
+    btnColorHiliteFg.grid(column=1, row=4, padx=(5,10), pady=10, sticky=W)
+    btnColorHiliteBg.grid(column=1, row=5, padx=(5,10), pady=10, sticky=W)
+
+    dlgToolColor.resizable(False, False)
+    #dlgToolColor.attributes('-toolwindow', True)
+    #dlgToolColor.overrideredirect(True)
+    dlgToolColor.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgToolColor)) # intercept close button
+    dlgToolColor.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgToolColor.wait_visibility() # can't grab until window appears, so we wait
+    dlgToolColor.grab_set()        # ensure all input goes to our window
+    dlgToolColor.wait_window()     # block until window is destroyed
 
 def mnuToolOptions():
     global dlgToolOptions
     dlgToolOptions = Toplevel(root)
-    dlgToolOptions.title("Find & Replace Text...")
+    dlgToolOptions.title("Editor Options")
     center_window(dlgToolOptions, 300, 500)
-    #dlgToolOptions.resizeable(width=False, height=False)
+
+    #txtFindR.focus()
+    #dlgToolOptions.resizable(False, False)
+    #dlgToolOptions.attributes('-toolwindow', True)
     #dlgToolOptions.overrideredirect(True)
-    #dlgDismiss(dlgToolOptions)
+    dlgToolOptions.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgToolOptions)) # intercept close button
+    dlgToolOptions.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgToolOptions.wait_visibility() # can't grab until window appears, so we wait
+    dlgToolOptions.grab_set()        # ensure all input goes to our window
+    dlgToolOptions.wait_window()     # block until window is destroyed
 
 def mnuHelpAbout():
     messagebox.showinfo("About", "This program is a text editor designed to help merge multiple HOSTS files together.")
@@ -354,12 +494,16 @@ def editorUpdate(e):    # Check to see if there are unsaved changes
     # Regardless of e.state, editor_text changes
     if e.keysym == "Return":
         pass
-    # If we are at the start of the buffer and BackSpace is pressed, no change is made
+    # If we are at the start of the buffer and BackSpace is pressed,
+    # no change is made
     if e.keysym == "BackSpace" and editor_text.index(INSERT) == 1.0:
         pass
-    # If we are at the end of the buffer and Delete is pressed, no change is made
-    # "KP_Delete" registers as "Delete" when numlock is off or shift is pressed and numlock is on
-    # (Num_Lock == ON && KP_Decimal) == Delete == (Num_Lock == OFF && KP_Delete)
+    # If we are at the end of the buffer and Delete is pressed,
+    # no change is made
+    # "KP_Delete" registers as "Delete" when numlock is off or
+    # shift is pressed and numlock is on
+    # (Num_Lock == ON && KP_Decimal) == Delete ==
+    # (Num_Lock == OFF && KP_Delete)
     if e.keysym == "Delete" and editor_text.index(INSERT) == 1.0:
         pass
     statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
@@ -376,21 +520,24 @@ def editorUpdate(e):    # Check to see if there are unsaved changes
 #
 # Scrolling issues: https://www.youtube.com/watch?v=0WafQCaok6g
 editor_frame = Frame(root)
-vert_scroll = Scrollbar(editor_frame, takefocus=0)  # Scroll bars should NOT be part of the tab order
+# Scroll bars should NOT be part of the tab order (takefocus=0)
+vert_scroll = Scrollbar(editor_frame, takefocus=0)
 vert_scroll.pack(side=RIGHT, fill=Y)
 horiz_scroll = Scrollbar(editor_frame, takefocus=0, orient="horizontal")
 horiz_scroll.pack(side=BOTTOM, fill=X)
 editor_text = Text(editor_frame, width=20, height=20, wrap="none", undo=True,
-# bg="black", fg="white",
-    selectbackground="yellow", xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
+    selectbackground="yellow", # Default is Gray
+    xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
+# Default to Dark Mode
+editor_text.config(fg="white", bg="black", insertbackground="white", insertwidth=2)
 
 editor_text.bind("<Button-3>", rightClickMenu)
+# Any time the cursor moves in the text box, set cursor pos in the status bar:
+#editor_text.bind("<Configure>", editorUpdate) # Doesn't work yet
 editor_text.bind("<KeyRelease>", editorUpdate)
-# Any time the cursor moves in the text box, set the cursor pos in the status bar:
-#editor_text.bind("<Configure>", statusBarCursor.config(text=editor_text.index(INSERT))) # Doesn't work yet
 #editor_text.pack needs to be added AFTER StatusBar is added
 
-editor_text.pack(expand=TRUE, fill=BOTH) # Needs to be added last for proper expanding layout behavior
+editor_text.pack(expand=TRUE, fill=BOTH) # Must be last to AutoResize properly
 
 # Configure scrollbars
 vert_scroll.config(command=editor_text.yview)
@@ -432,7 +579,7 @@ mnuTool.add_command(label="Sort Hosts", command=mnuToolSort)
 mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
 mnuTool.add_command(label="Text Wrap", command=mnuToolWrap) # Radio between [none, char, word]
 mnuTool.add_command(label="Text Font", command=mnuToolFont) # blockcursor= ?
-mnuTool.add_command(label="Editor Theme", command=mnuToolTheme)
+mnuTool.add_command(label="Editor Colors", command=mnuToolColor)
 mnuTool.add_command(label="Options...", command=mnuToolOptions)
 
 mnuHelp = Menu(rootMenu, tearoff=False)
@@ -487,6 +634,12 @@ def mnuEnable(fileOpened):
     mnuTool.entryconfig("Sort Hosts", state="normal") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
 
+#def quickTheme(theme, e=None):
+#    try:
+#        root.set_theme(theme)
+#    except:
+#        pass
+
 # Main application key bindings:
 root.bind("<Control-Key-n>", mnuFileNew)
 root.bind("<Control-Key-o>", mnuFileOpen)
@@ -504,15 +657,19 @@ root.bind("<Control-Key-h>", mnuEditReplace)
 
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
-Grid.columnconfigure(statusBarRoot, 1, weight=1) # Make at least 1 status bar field expand
+Grid.columnconfigure(statusBarRoot, 2, weight=1) # Make at least 1 status bar field expand
+#statusTheme = ttk.Combobox(statusBarRoot, values=THEMES)
+#statusTheme.grid(column=0, row=0, padx=1, sticky=W+E)
 statusBarCursor = Label(statusBarRoot, text="Coord", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBarCursor.grid(column=0, row=0, padx=1, sticky=W+E)
+statusBarCursor.grid(column=1, row=0, padx=1, sticky=W+E)
 statusBarFile = Label(statusBarRoot, text="CurrentFilename", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBarFile.grid(column=1, row=0, padx=1, sticky=W+E)
+statusBarFile.grid(column=2, row=0, padx=1, sticky=W+E)
 # Maybe add another status indicator containing a progress bar for file Open/Save?
 statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBar.grid(column=2, row=0, sticky=W+E)
+statusBar.grid(column=3, row=0, sticky=W+E)
 #statusBarCursor.config(textvariable=editor_text.index(INSERT)) # Testing stuff
+
+#statusTheme.bind("<<ComboboxSelected>>", lambda e:quickTheme(statusTheme.get()))
 
 # Now we can add the status bar
 statusBarRoot.pack(side=BOTTOM, fill=X)
