@@ -32,6 +32,11 @@ bld/
 [Ll]ogs/
 core
 
+# PyInstaller files
+hostsman.spec
+build/
+dist/
+
 # Visual Studio 2015/2017 cache/options directory
 .idea/
 .vscode/

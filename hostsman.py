@@ -1,4 +1,4 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 
 #%% <-- For Jupyter debugging
 import platform
@@ -70,7 +70,7 @@ def detectHosts():
             hosts_path = winreg.ExpandEnvironmentStrings(keyval)
             hosts_file = hosts_path + r"\HOSTS"
             hivekey.Close()
-        except:  
+        except Exception:
             # If there is any reason for the above code block to fail
             # fallback to the standard default location and path
             hosts_path = r"C:\Windows\System32\drivers\etc"
@@ -604,7 +604,7 @@ def mnuDisableWhenEmpty(firstRun):
     mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
-    if firstRun:
+    if fileMainFilename == "":
         mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
         mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
     mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
@@ -623,7 +623,7 @@ def mnuEnable(fileOpened):
     mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
-    if fileOpened:
+    if fileMainFilename != "":
         mnuFile.entryconfig("Merge", state="normal")      # Enable when fileMainFilename != ""
         mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
     mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
@@ -679,12 +679,13 @@ editor_frame.pack(expand=TRUE, fill=BOTH)
 #sqdb.close()
 
 # Now we get to the meat and potatoes!
-detectHosts()
-#mnuDisableWhenEmpty(True)
+if __name__ == '__main__':
+    detectHosts()
+    #mnuDisableWhenEmpty(True)
 
-editor_text.focus()
-#editor_text.insert(END, font.families())
-root.mainloop()
+    editor_text.focus()
+    #editor_text.insert(END, font.families())
+    root.mainloop()
 
 # Message boxes
 # showinfo, showwarning, showerror, askquestion, askokcancel, askyesno
