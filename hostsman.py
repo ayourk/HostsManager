@@ -76,17 +76,16 @@ def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
     app_left = root.winfo_rootx()
     app_width = root.winfo_width()
     app_height = root.winfo_height()
-    app_wcenter = int(app_left + int(app_width / 2))
-    app_hcenter = int(app_top + int(app_height / 2))
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
     dlg_left = int((screen_width/2) - (dlg_width/2))
     dlg_top = int((screen_height/2) - (dlg_height/2))
-    dlgapp_left = int((app_wcenter/2) - (dlg_width/2))
-    dlgapp_top = int((app_hcenter/2) - (dlg_height/2))
+    dlgapp_left = int(app_left + ((app_width/2) - (dlg_width/2)))
+    dlgapp_top = int(app_top + ((app_height/2) - (dlg_height/2)))
+    dlgapp_top -= 35   # On my system, the top is biased +59
     geometry_text = f"{dlg_width}x{dlg_height}+{dlg_left}+{dlg_top}"
-    #if appCenter: # Doesn't work quite right yet
-    #    geometry_text = f"{dlg_width}x{dlg_height}+{dlgapp_left}+{dlgapp_top}"
+    if appCenter:   # Center on root window
+        geometry_text = f"{dlg_width}x{dlg_height}+{dlgapp_left}+{dlgapp_top}"
     curwind.geometry(geometry_text)
 
 def dlgDismiss(dlgWindow):
