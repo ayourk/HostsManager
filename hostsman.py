@@ -39,14 +39,6 @@ root = Tk()
 root.title("Hosts File Manager")
 #root.iconbitmap("/path/to/file.ico")
 
-app_width = 800
-app_height = 600
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
-app_top = int((screen_width - app_width) / 2)
-app_left = int((screen_height - app_height) / 2)
-root.geometry(f"{app_width}x{app_height}+{app_top}+{app_left}")
-
 
 # Utility functions
 def detectHosts():
@@ -77,12 +69,25 @@ def detectHosts():
             hosts_file = hosts_path + r"\HOSTS"
     init_dir = hosts_path
 
-def center_window(curwind, dlg_width=200, dlg_height=200):
-    # This needs refactoring since it doesn't work quite right for systems with 2+ screens
-    global screen_width, screen_height, app_top, app_left, app_width, app_height
-    dlg_top = int((screen_width - dlg_width) / 2)
-    dlg_left = int((screen_height - dlg_height) / 2)
-    curwind.geometry(f"{dlg_width}x{dlg_height}+{dlg_top}+{dlg_left}")
+def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
+    # Needs a rewrite since it fails for some systems with 2+ screens
+    #curwind.update_idletasks() # Make sure geometries are up to date (can cause flicker)
+    app_top = root.winfo_rooty()
+    app_left = root.winfo_rootx()
+    app_width = root.winfo_width()
+    app_height = root.winfo_height()
+    app_wcenter = int(app_left + int(app_width / 2))
+    app_hcenter = int(app_top + int(app_height / 2))
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    dlg_left = int((screen_width/2) - (dlg_width/2))
+    dlg_top = int((screen_height/2) - (dlg_height/2))
+    dlgapp_left = int((app_wcenter/2) - (dlg_width/2))
+    dlgapp_top = int((app_hcenter/2) - (dlg_height/2))
+    geometry_text = f"{dlg_width}x{dlg_height}+{dlg_left}+{dlg_top}"
+    #if appCenter: # Doesn't work quite right yet
+    #    geometry_text = f"{dlg_width}x{dlg_height}+{dlgapp_left}+{dlgapp_top}"
+    curwind.geometry(geometry_text)
 
 def dlgDismiss(dlgWindow):
     dlgWindow.grab_release()
@@ -157,7 +162,7 @@ def mnuFileMerge():
     global fileUnsavedChanges
     fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
     text_file = open(fileMainFilename, "r+")
-    hosts_contents = text_file.read()
+    hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
     editor_text.insert(END, "\r\n")
     editor_text.insert(END, hosts_contents)
     text_file.close()
@@ -166,6 +171,7 @@ def mnuFileMerge():
 def mnuFileMerge2():    # Custom dialog version (TODO)
     global fileUnsavedChanges
     center_window(dlgFileMerge)
+    # TODO:
     #fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
     text_file = open(fileMainFilename, "r+")
     hosts_contents = text_file.read()
@@ -299,6 +305,7 @@ def mnuEditFindNext(searchstr):
     #    return      # Not found
     #editor_text.tag_add("sel", str(posFound))
     #print(posFound)
+    # TODO:
 
     # Search for the text in txtFind.get() and highlight the first instance
     # starting from editor_text.index(INSERT)
@@ -341,13 +348,13 @@ def mnuEditReplace(e):
     dlgEditReplace.grab_set()        # ensure all input goes to our window
     dlgEditReplace.wait_window()     # block until window is destroyed
 def mnuEditReplaceSkip():
-    global dlgEditReplace
+    # TODO:
     dlgDismiss(dlgEditReplace)
 def mnuEditReplaceNext():
-    global dlgEditReplace
+    # TODO:
     dlgDismiss(dlgEditReplace)
 def mnuEditReplaceCancel():
-    global dlgEditReplace
+    # TODO:
     dlgDismiss(dlgEditReplace)
 
 def mnuSelectAll(e):
@@ -358,6 +365,7 @@ def mnuToolSort():
     dlgToolSort = Toplevel(root)
     dlgToolSort.title("Sort Hosts")
     center_window(dlgToolSort, 300, 500)
+    # TODO:
 
     #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
@@ -376,6 +384,7 @@ def mnuToolFilter():
     dlgToolFilter = Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
     center_window(dlgToolFilter, 300, 250)
+    # TODO:
 
     #txtFindR.focus()
     #dlgToolFilter.resizable(False, False)
@@ -389,9 +398,9 @@ def mnuToolFilter():
     dlgToolFilter.grab_set()        # ensure all input goes to our window
     dlgToolFilter.wait_window()     # block until window is destroyed
 
-def mnuToolWrap():
-    # TODO: Allow switching between none, char, word
-    pass
+def mnuToolWrapSet(curwrap):
+    editor_text["wrap"] = curwrap
+    statusBarWrap["text"] = f"Wrap: {curwrap.capitalize()}"
 
 def fontChanged(curfont):
     editor_text.config(font=curfont)
@@ -468,6 +477,7 @@ def mnuToolOptions():
     dlgToolOptions = Toplevel(root)
     dlgToolOptions.title("Editor Options")
     center_window(dlgToolOptions, 300, 500)
+    # TODO:
 
     #txtFindR.focus()
     #dlgToolOptions.resizable(False, False)
@@ -488,9 +498,9 @@ def rightClickMenu(e):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
 
 def editorUpdate(e):    # Check to see if there are unsaved changes
-    global statusBar
     # Update status bar with cursor position
-    statusBarCursor.config(text=editor_text.index(INSERT))
+    cursortxt = "Cursor: " + editor_text.index(INSERT)
+    statusBarCursor.config(text=cursortxt)
     # Regardless of e.state, editor_text changes
     if e.keysym == "Return":
         pass
@@ -573,11 +583,18 @@ mnuEdit.add_separator()
 mnuEdit.add_command(label="Find...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
 mnuEdit.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
 
+textWrap = StringVar()
+textWrap.set(editor_text["wrap"])
+
 mnuTool = Menu(rootMenu, tearoff=False)
+mnuToolWrap = Menu(mnuTool, tearoff=False)
 rootMenu.add_cascade(label="Tools", menu=mnuTool)
 mnuTool.add_command(label="Sort Hosts", command=mnuToolSort)
 mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
-mnuTool.add_command(label="Text Wrap", command=mnuToolWrap) # Radio between [none, char, word]
+mnuTool.add_cascade(label="Text Wrap", menu=mnuToolWrap) # Radio between [none, char, word]
+mnuToolWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuToolWrap.add_radiobutton(label="Char", value="char", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuToolWrap.add_radiobutton(label="Word", value="word", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuTool.add_command(label="Text Font", command=mnuToolFont) # blockcursor= ?
 mnuTool.add_command(label="Editor Colors", command=mnuToolColor)
 mnuTool.add_command(label="Options...", command=mnuToolOptions)
@@ -587,6 +604,7 @@ rootMenu.add_cascade(label="Help", menu=mnuHelp)
 mnuHelp.add_command(label="About...", command=mnuHelpAbout)
 
 mnuRightClick = Menu(root, tearoff=False)
+mnuRightWrap = Menu(mnuRightClick, tearoff=False)
 mnuRightClick.add_command(label="Select All", command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
 mnuRightClick.add_command(label="Insert File...", command=lambda: mnuInsertFile(0), accelerator="(Ctrl+I)")
 mnuRightClick.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
@@ -595,6 +613,11 @@ mnuRightClick.add_command(label="Paste", command=lambda: mnuEditPaste(0), accele
 mnuRightClick.add_separator()
 mnuRightClick.add_command(label="Find...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
 mnuRightClick.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
+mnuRightClick.add_cascade(label="Text Wrap", menu=mnuRightWrap) # Radio between [none, char, word]
+# Might be a bug that we can't use mnuToolWrap above instead of having to rebuild it below
+mnuRightWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuRightWrap.add_radiobutton(label="Char", value="char", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuRightWrap.add_radiobutton(label="Word", value="word", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuRightClick.add_separator()
 mnuRightClick.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
@@ -660,13 +683,15 @@ statusBarRoot = Label(root, relief=SUNKEN)
 Grid.columnconfigure(statusBarRoot, 2, weight=1) # Make at least 1 status bar field expand
 #statusTheme = ttk.Combobox(statusBarRoot, values=THEMES)
 #statusTheme.grid(column=0, row=0, padx=1, sticky=W+E)
-statusBarCursor = Label(statusBarRoot, text="Coord", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBarCursor.grid(column=1, row=0, padx=1, sticky=W+E)
+statusBarCursor = Label(statusBarRoot, text="Cursor: 0.0", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBarCursor.grid(column=3, row=0, padx=1, sticky=W+E)
 statusBarFile = Label(statusBarRoot, text="CurrentFilename", padx=5, pady=3, bd=1, relief=SUNKEN)
 statusBarFile.grid(column=2, row=0, padx=1, sticky=W+E)
 # Maybe add another status indicator containing a progress bar for file Open/Save?
 statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=SUNKEN)
-statusBar.grid(column=3, row=0, sticky=W+E)
+statusBar.grid(column=1, row=0, sticky=W+E)
+statusBarWrap = Label(statusBarRoot, text="Wrap: None", padx=5, pady=3, bd=1, relief=SUNKEN)
+statusBarWrap.grid(column=4, row=0, sticky=W+E)
 #statusBarCursor.config(textvariable=editor_text.index(INSERT)) # Testing stuff
 
 #statusTheme.bind("<<ComboboxSelected>>", lambda e:quickTheme(statusTheme.get()))
@@ -680,6 +705,7 @@ editor_frame.pack(expand=TRUE, fill=BOTH)
 
 # Now we get to the meat and potatoes!
 if __name__ == '__main__':
+    center_window(root, 800, 600, False)
     detectHosts()
     #mnuDisableWhenEmpty(True)
 
