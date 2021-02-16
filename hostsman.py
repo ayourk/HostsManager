@@ -25,7 +25,6 @@ import threading
 #
 
 # TODO: 
-#        Handle Read/Write file exceptions
 #        Detect when editor_text.get() changes (partially done)
 #        Detect when the cursor position changes in editor_text (partially done)
 #        Finish special dialogs related to the purpose of this app
@@ -114,7 +113,7 @@ dlgToolOptions = False
 dlgHelpAbout = False
 
 # Menu and related functions
-def mnuFileNew(e):
+def mnuFileNew(e=None):
     global fileUnsavedChanges, fileMainFilename
     if fileUnsavedChanges:
         root.bell()
@@ -127,7 +126,7 @@ def mnuFileNew(e):
     fileUnsavedChanges = False
     editor_text.delete(1.0, END)
 
-def mnuFileOpenSys():
+def mnuFileOpenSys(e=None):
     global fileUnsavedChanges, fileMainFilename, init_dir
     if hosts_file == "":
         response = messagebox.askyesno("HOSTS Not Found",
@@ -137,7 +136,24 @@ def mnuFileOpenSys():
             fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open System HOSTS")
     else:
         fileMainFilename = hosts_file
-    if fileMainFilename != "":
+    if fileMainFilename != "" and fileMainFilename != ():
+        try:
+            text_file = open(fileMainFilename, "r")
+            hosts_contents = text_file.read()
+            editor_text.delete(1.0, END)
+            editor_text.insert(END, hosts_contents)
+            text_file.close()
+            fileUnsavedChanges = False
+            statusBarFile.config(text=fileMainFilename)
+        except Exception as exp:
+            messagebox.showerror("ERROR", exp)
+
+def mnuFileOpen(e=None):
+    global fileUnsavedChanges, fileMainFilename
+    try:
+        fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
         text_file = open(fileMainFilename, "r")
         hosts_contents = text_file.read()
         editor_text.delete(1.0, END)
@@ -145,81 +161,107 @@ def mnuFileOpenSys():
         text_file.close()
         fileUnsavedChanges = False
         statusBarFile.config(text=fileMainFilename)
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileOpen(e):
-    global fileUnsavedChanges, fileMainFilename
-    fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
-    text_file = open(fileMainFilename, "r+")
-    hosts_contents = text_file.read()
-    editor_text.delete(1.0, END)
-    editor_text.insert(END, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = False
-    statusBarFile.config(text=fileMainFilename)
-
-def mnuFileMerge():
+def mnuFileMerge(e=None):
     global fileUnsavedChanges
-    fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
-    text_file = open(fileMainFilename, "r+")
-    hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
-    editor_text.insert(END, "\r\n")
-    editor_text.insert(END, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = True
+    try:
+        fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
+        text_file = open(fileMainFilename, "r")
+        hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
+        editor_text.insert(END, "\r\n")
+        editor_text.insert(END, hosts_contents)
+        text_file.close()
+        fileUnsavedChanges = True
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileMerge2():    # Custom dialog version (TODO)
+def mnuFileMerge2(e=None):    # Custom dialog version (TODO)
     global fileUnsavedChanges
     center_window(dlgFileMerge)
     # TODO:
     #fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
-    text_file = open(fileMainFilename, "r+")
+    if fileMainFilename == "" or fileMainFilename == ():
+        return
+    text_file = open(fileMainFilename, "r")
     hosts_contents = text_file.read()
     editor_text.insert(END, "\r\n")
     editor_text.insert(END, hosts_contents)
     text_file.close()
     fileUnsavedChanges = True
 
-def mnuInsertFile(e):   # Resides under the Edit menu
+def mnuInsertFile(e=None):   # Resides under the Edit menu
     global fileUnsavedChanges
-    fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Insert a file")
-    text_file = open(fileMainFilename, "r")
-    hosts_contents = text_file.read()
-    curpos = editor_text.index(INSERT)
-    editor_text.insert(curpos, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = True
+    try:
+        fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Insert a file")
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
+        text_file = open(fileMainFilename, "r")
+        hosts_contents = text_file.read()
+        curpos = editor_text.index(INSERT)
+        editor_text.insert(curpos, hosts_contents)
+        text_file.close()
+        fileUnsavedChanges = True
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileSave(e):
+def mnuFileSave(e=None):
     global fileUnsavedChanges, fileMainFilename, init_dir
-    if fileMainFilename == "":
-        fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save Hosts file")
-    text_file = open(fileMainFilename, "w+")
-    text_file.write(editor_text.get(1.0, END))
-    fileUnsavedChanges = False
-    statusBarFile.config(text=f"Saved: {fileMainFilename}")
+    try:
+        if fileMainFilename == "":
+            fileMainFilename = filedialog.asksaveasfilename(
+                initialdir=init_dir,
+                initialfile="hosts-custom.txt",
+                title="Save Hosts file")
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
+        text_file = open(fileMainFilename, "w+")
+        text_file.write(editor_text.get(1.0, END))
+        fileUnsavedChanges = False
+        statusBarFile.config(text=f"Saved: {fileMainFilename}")
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileSaveAs():
+def mnuFileSaveAs(e=None):
     global fileUnsavedChanges, fileMainFilename
-    fileMainFilename = filedialog.asksaveasfilename(initialdir=init_dir, title="Save File As...")
-    text_file = open(fileMainFilename, "w+")
-    text_file.write(editor_text.get(1.0, END))
-    fileUnsavedChanges = False
-    statusBarFile.config(text=f"Saved As: {fileMainFilename}")
+    try:
+        fileMainFilename = filedialog.asksaveasfilename(
+            initialdir=init_dir,
+            initialfile="hosts-custom.txt",
+            title="Save File As...")
+        print(fileMainFilename)
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
+        text_file = open(fileMainFilename, "w+")
+        text_file.write(editor_text.get(1.0, END))
+        fileUnsavedChanges = False
+        statusBarFile.config(text=f"Saved As: {fileMainFilename}")
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileRevert():
+def mnuFileRevert(e=None):
     global fileUnsavedChanges, fileMainFilename, init_dir
-    if fileMainFilename == "":
-        fileMainFilename = filedialog.askopenfilename(initialdir=init_dir, title="Revert Changes to file")
-    text_file = open(fileMainFilename, "r+")
-    hosts_contents = text_file.read()
-    editor_text.delete(1.0, END)
-    editor_text.insert(END, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = False
-    statusBarFile.config(text=fileMainFilename)
+    try:
+        if fileMainFilename == "":
+            fileMainFilename = filedialog.askopenfilename(
+                initialdir=init_dir, title="Revert Changes to file")
+        if fileMainFilename == "" or fileMainFilename == ():
+            return
+        text_file = open(fileMainFilename, "r")
+        hosts_contents = text_file.read()
+        editor_text.delete(1.0, END)
+        editor_text.insert(END, hosts_contents)
+        text_file.close()
+        fileUnsavedChanges = False
+        statusBarFile.config(text=fileMainFilename)
+    except Exception as exp:
+        messagebox.showerror("ERROR", exp)
 
-def mnuFileExit(e):
-    global fileUnsavedChanges, fileMainFilename
+def mnuFileExit(e=None):
+    global fileUnsavedChanges
     quitMsg = "Are you sure you want to quit?"
     menuBarUsed = True
     if e:   # Don't prompt to quit if key binding was used unless there are unsaved changes
@@ -233,17 +275,17 @@ def mnuFileExit(e):
     root.quit()
     # Exit app
 
-def mnuEditUndo(e):
+def mnuEditUndo(e=None):
     mnuEdit.entryconfig("Undo", state="disabled")
     mnuEdit.entryconfig("Redo", state="normal")
     editor_text.edit_undo()
 
-def mnuEditRedo(e):
+def mnuEditRedo(e=None):
     mnuEdit.entryconfig("Undo", state="normal")
     mnuEdit.entryconfig("Redo", state="disabled")
     editor_text.edit_redo()
 
-def mnuEditCut(e):
+def mnuEditCut(e=None):
     global selected_text
     if e:
         selected_text = root.clipboard_get()
@@ -253,7 +295,7 @@ def mnuEditCut(e):
         root.clipboard_clear()
         root.clipboard_append(selected_text)
 
-def mnuEditCopy(e):
+def mnuEditCopy(e=None):
     global selected_text
     if e:
         selected_text = root.clipboard_get()
@@ -262,7 +304,7 @@ def mnuEditCopy(e):
         root.clipboard_clear()
         root.clipboard_append(selected_text)
 
-def mnuEditPaste(e):
+def mnuEditPaste(e=None):
     global selected_text
     curpos = editor_text.index(INSERT)
     if e:
@@ -270,7 +312,7 @@ def mnuEditPaste(e):
     elif selected_text:
         editor_text.insert(curpos, selected_text)
 
-def mnuEditFind(e):
+def mnuEditFind(e=None):
     global dlgEditFind
     dlgEditFind = Toplevel(root)
     dlgEditFind.title("Find Text...")
@@ -313,7 +355,7 @@ def mnuEditFindCancel():
     global dlgEditFind
     dlgDismiss(dlgEditFind)
 
-def mnuEditReplace(e):
+def mnuEditReplace(e=None):
     global dlgEditReplace
     dlgEditReplace = Toplevel(root)
     dlgEditReplace.title("Find & Replace Text...")
@@ -346,20 +388,20 @@ def mnuEditReplace(e):
     dlgEditReplace.wait_visibility() # can't grab until window appears, so we wait
     dlgEditReplace.grab_set()        # ensure all input goes to our window
     dlgEditReplace.wait_window()     # block until window is destroyed
-def mnuEditReplaceSkip():
+def mnuEditReplaceSkip(e=None):
     # TODO:
     dlgDismiss(dlgEditReplace)
-def mnuEditReplaceNext():
+def mnuEditReplaceNext(e=None):
     # TODO:
     dlgDismiss(dlgEditReplace)
-def mnuEditReplaceCancel():
+def mnuEditReplaceCancel(e=None):
     # TODO:
     dlgDismiss(dlgEditReplace)
 
-def mnuSelectAll(e):
+def mnuSelectAll(e=None):
     editor_text.tag_add("sel", "1.0", "end")
 
-def mnuToolSort():
+def mnuToolSort(e=None):
     global dlgToolSort
     dlgToolSort = Toplevel(root)
     dlgToolSort.title("Sort Hosts")
@@ -378,7 +420,7 @@ def mnuToolSort():
     dlgToolSort.grab_set()        # ensure all input goes to our window
     dlgToolSort.wait_window()     # block until window is destroyed
 
-def mnuToolFilter():
+def mnuToolFilter(e=None):
     global dlgToolFilter
     dlgToolFilter = Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
@@ -403,7 +445,7 @@ def mnuToolWrapSet(curwrap):
 
 def fontChanged(curfont):
     editor_text.config(font=curfont)
-def mnuToolFont():
+def mnuToolFont(e=None):
     # Tkinter has not yet added a convenient way to use this font dialog,
     # so I have to use the Tcl API directly. You can see the latest work
     # towards a proper Python API and download code at [Issue#28694].
@@ -422,7 +464,7 @@ def dlgColorChange(self, editcolor):
     else:
         self.config(bg=newcolor, activebackground=newcolor)
         editor_text[editcolor] = newcolor
-def mnuToolColor():
+def mnuToolColor(e=None):
     global dlgToolColor
     dlgToolColor = Toplevel(root)
     dlgToolColor.title("Editor Colors")
@@ -471,7 +513,7 @@ def mnuToolColor():
     dlgToolColor.grab_set()        # ensure all input goes to our window
     dlgToolColor.wait_window()     # block until window is destroyed
 
-def mnuToolOptions():
+def mnuToolOptions(e=None):
     global dlgToolOptions
     dlgToolOptions = Toplevel(root)
     dlgToolOptions.title("Editor Options")
@@ -490,13 +532,13 @@ def mnuToolOptions():
     dlgToolOptions.grab_set()        # ensure all input goes to our window
     dlgToolOptions.wait_window()     # block until window is destroyed
 
-def mnuHelpAbout():
+def mnuHelpAbout(e=None):
     messagebox.showinfo("About", "This program is a text editor designed to help merge multiple HOSTS files together.")
 
-def rightClickMenu(e):
+def rightClickMenu(e=None):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
 
-def editorUpdate(e):    # Check to see if there are unsaved changes
+def editorUpdate(e=None):    # Check to see if there are unsaved changes
     # Update status bar with cursor position
     cursortxt = "Cursor: " + editor_text.index(INSERT)
     statusBarCursor.config(text=cursortxt)
@@ -559,11 +601,11 @@ root.config(menu=rootMenu)
 mnuFile = Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="File", menu=mnuFile, accelerator="(Ctrl+N)")
 mnuFile.add_command(label="New", command=lambda: mnuFileNew(0), accelerator="(Ctrl+N)")
-mnuFile.add_command(label="Open System Hosts", command=mnuFileOpenSys)
+mnuFile.add_command(label="Open System Hosts", command=mnuFileOpenSys, accelerator="(Ctrl+Shift+O)")
 mnuFile.add_command(label="Open...", command=lambda: mnuFileOpen(0), accelerator="(Ctrl+O)")
 mnuFile.add_command(label="Merge", command=mnuFileMerge)
 mnuFile.add_command(label="Save", command=lambda: mnuFileSave(0), accelerator="(Ctrl+S)")
-mnuFile.add_command(label="Save As...", command=mnuFileSaveAs)
+mnuFile.add_command(label="Save As...", command=mnuFileSaveAs, accelerator="(Ctrl+Shift+S)")
 mnuFile.add_command(label="Revert", command=mnuFileRevert)
 mnuFile.add_separator()
 mnuFile.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
@@ -640,7 +682,7 @@ def mnuDisableWhenEmpty(firstRun):
     mnuTool.entryconfig("Sort Hosts", state="disabled") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
 
-def mnuEnable(fileOpened):
+def mnuEnable(fileOpened=None):
     global mnuFile, mnuEdit, mnuTool
     mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
@@ -663,19 +705,21 @@ def mnuEnable(fileOpened):
 #        pass
 
 # Main application key bindings:
-root.bind("<Control-Key-n>", mnuFileNew)
-root.bind("<Control-Key-o>", mnuFileOpen)
-root.bind("<Control-Key-s>", mnuFileSave)
-root.bind("<Control-Key-q>", mnuFileExit)
+editor_text.bind("<Control-Key-n>", mnuFileNew)
+editor_text.bind("<Control-Key-o>", mnuFileOpen)
+editor_text.bind("<Control-Key-O>", mnuFileOpenSys)
+editor_text.bind("<Control-Key-s>", mnuFileSave)
+editor_text.bind("<Control-Key-S>", mnuFileSaveAs)
+editor_text.bind("<Control-Key-q>", mnuFileExit)
 #root.bind("<Control-Key-z>", mnuEditUndo)
 #root.bind("<Control-Key-y>", mnuEditRedo)
-root.bind("<Control-Key-a>", mnuSelectAll)
-root.bind("<Control-Key-i>", mnuInsertFile)
-root.bind("<Control-Key-x>", mnuEditCut)
-root.bind("<Control-Key-c>", mnuEditCopy)
-root.bind("<Control-Key-v>", mnuEditPaste)
-root.bind("<Control-Key-f>", mnuEditFind)
-root.bind("<Control-Key-h>", mnuEditReplace)
+editor_text.bind("<Control-Key-a>", mnuSelectAll)
+editor_text.bind("<Control-Key-i>", mnuInsertFile)
+editor_text.bind("<Control-Key-x>", mnuEditCut)
+editor_text.bind("<Control-Key-c>", mnuEditCopy)
+editor_text.bind("<Control-Key-v>", mnuEditPaste)
+editor_text.bind("<Control-Key-f>", mnuEditFind)
+editor_text.bind("<Control-Key-h>", mnuEditReplace)
 
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
