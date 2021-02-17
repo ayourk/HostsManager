@@ -19,16 +19,15 @@ import threading
 #
 # Credits:
 #
-# Most of this code was made possible via the videos from the Youtube channel at
+# Most of this code was made possible via videos from the Youtube channel at
 #   https://www.youtube.com/c/Codemycom/videos
 #
 #
 
-# TODO: 
-#        Detect when editor_text.get() changes (partially done)
-#        Detect when the cursor position changes in editor_text (partially done)
+# TODO:
+#        Detect cursor position changes in editor_text (partially done)
 #        Finish special dialogs related to the purpose of this app
-#           Make the Minimize button disappear
+#           Make the Minimize button disappear or nonfunctional
 #        Perform the backend logic on editor_text with said dialogs
 #        Finish backend functionality for many of the dialogs
 #           Flesh out Sort, Filter, Options dialogs
@@ -41,7 +40,7 @@ root.title("Hosts File Manager")
 
 # Utility functions
 def detectHosts():
-    # 'Linux', 'Darwin', 'Java', 'Windows'
+    # "Linux", "Darwin", "Java", "Windows"
     global hosts_path, hosts_file, path_slash, init_dir
     curopsys = platform.system()
     if str(curopsys) == "Linux":
@@ -59,13 +58,12 @@ def detectHosts():
             subkey = winreg.OpenKey(hivekey, r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters")
             keyval = winreg.QueryValueEx(subkey, "DataBasePath")[0]
             hosts_path = winreg.ExpandEnvironmentStrings(keyval)
-            hosts_file = hosts_path + r"\HOSTS"
             hivekey.Close()
         except Exception:
             # If there is any reason for the above code block to fail
             # fallback to the standard default location and path
             hosts_path = r"C:\Windows\System32\drivers\etc"
-            hosts_file = hosts_path + r"\HOSTS"
+        hosts_file = hosts_path + r"\HOSTS"
     init_dir = hosts_path
 
 def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
@@ -88,6 +86,8 @@ def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
     curwind.geometry(geometry_text)
 
 def dlgDismiss(dlgWindow):
+    global searchStart
+    searchStart = "1.0"
     dlgWindow.grab_release()
     dlgWindow.destroy()
 
@@ -111,6 +111,7 @@ dlgToolFilter = False
 dlgToolColor = False
 dlgToolOptions = False
 dlgHelpAbout = False
+boolMatchCase = BooleanVar()
 
 # Menu and related functions
 def mnuFileNew(e=None):
@@ -124,6 +125,7 @@ def mnuFileNew(e=None):
     fileMainFilename = ""
     statusBarFile.config(text="(Untitled)")
     fileUnsavedChanges = False
+    editor_text.edit_modified(False)
     editor_text.delete(1.0, END)
 
 def mnuFileOpenSys(e=None):
@@ -144,6 +146,7 @@ def mnuFileOpenSys(e=None):
             editor_text.insert(END, hosts_contents)
             text_file.close()
             fileUnsavedChanges = False
+            editor_text.edit_modified(False)
             statusBarFile.config(text=fileMainFilename)
         except Exception as exp:
             messagebox.showerror("ERROR", exp)
@@ -160,6 +163,7 @@ def mnuFileOpen(e=None):
         editor_text.insert(END, hosts_contents)
         text_file.close()
         fileUnsavedChanges = False
+        editor_text.edit_modified(False)
         statusBarFile.config(text=fileMainFilename)
     except Exception as exp:
         messagebox.showerror("ERROR", exp)
@@ -221,6 +225,7 @@ def mnuFileSave(e=None):
         text_file = open(fileMainFilename, "w+")
         text_file.write(editor_text.get(1.0, END))
         fileUnsavedChanges = False
+        editor_text.edit_modified(False)
         statusBarFile.config(text=f"Saved: {fileMainFilename}")
     except Exception as exp:
         messagebox.showerror("ERROR", exp)
@@ -238,6 +243,7 @@ def mnuFileSaveAs(e=None):
         text_file = open(fileMainFilename, "w+")
         text_file.write(editor_text.get(1.0, END))
         fileUnsavedChanges = False
+        editor_text.edit_modified(False)
         statusBarFile.config(text=f"Saved As: {fileMainFilename}")
     except Exception as exp:
         messagebox.showerror("ERROR", exp)
@@ -256,6 +262,7 @@ def mnuFileRevert(e=None):
         editor_text.insert(END, hosts_contents)
         text_file.close()
         fileUnsavedChanges = False
+        editor_text.edit_modified(False)
         statusBarFile.config(text=fileMainFilename)
     except Exception as exp:
         messagebox.showerror("ERROR", exp)
@@ -312,7 +319,7 @@ def mnuEditPaste(e=None):
     elif selected_text:
         editor_text.insert(curpos, selected_text)
 
-def mnuEditFind(e=None):
+def mnuEditFindOld(e=None):
     global dlgEditFind
     dlgEditFind = Toplevel(root)
     dlgEditFind.title("Find Text...")
@@ -337,65 +344,178 @@ def mnuEditFind(e=None):
     dlgEditFind.grab_set()        # ensure all input goes to our window
     dlgEditFind.wait_window()     # block until window is destroyed
 def mnuEditFindNext(searchstr):
-    global dlgEditFind, editor_text
-    #editor_text.insert(END, dlgEditFind.children.get("Find Next"))
-    curpos = editor_text.index(INSERT)
-    text_file = editor_text.get(1.0, END)
-    #posFound = text_file.find(searchstr, int(curpos))
-    #if (posFound == -1):
-    #    return      # Not found
-    #editor_text.tag_add("sel", str(posFound))
-    #print(posFound)
-    # TODO:
-
-    # Search for the text in txtFind.get() and highlight the first instance
-    # starting from editor_text.index(INSERT)
-    #dlgDismiss(dlgEditFind)
+    global dlgEditReplace, txtFind, searchStart
+    # remove tag "found" from index 1 to END
+#    editor_text.tag_remove("found", "1.0", END)
+    search_text = txtFind.get()
+    if (search_text):
+        cur_index = searchStart
+        #while True:
+        # searches for desired string from index 1
+        cur_index = editor_text.search(search_text, cur_index, nocase=True,
+                            stopindex=END)
+        if cur_index:
+            editor_text.see(cur_index)
+            # last index sum of current index and length of editor_text
+            next_index = "% s+% dc" % (cur_index, len(search_text))
+            # overwrite "Found" at cur_index
+            editor_text.mark_set(INSERT, next_index)
+            editor_text.tag_add("sel", cur_index, next_index)
+            # Move cursor to end of selected text
+            searchStart = next_index
+        # end while true:
+        # mark located string as "selected"
+#        editor_text.tag_config("found",
+#            foreground=editor_text["selectforeground"],
+#            background=editor_text["selectbackground"])
+    txtFind.select_range(0, END)
+    txtFind.focus_set()
+    editor_text.focus_set()
 def mnuEditFindCancel():
     global dlgEditFind
     dlgDismiss(dlgEditFind)
 
-def mnuEditReplace(e=None):
-    global dlgEditReplace
+def mnuEditFind(e=None): # Used to be mnuEditReplace
+    # Based on https://www.geeksforgeeks.org/create-find-and-replace-features-in-tkinter-text-widget/
+    global dlgEditReplace, txtFind, txtReplace, searchStart, boolMatchCase
     dlgEditReplace = Toplevel(root)
+    searchStart = "1.0"
     dlgEditReplace.title("Find & Replace Text...")
-    center_window(dlgEditReplace, 285, 125)
-    lblFindR = Label(dlgEditReplace, text="Find:")
-    lblFindR.grid(column=0, row=0, padx=10, pady=10, sticky=E)
-    txtFindR = Entry(dlgEditReplace)
-    txtFindR.grid(column=1, row=0, columnspan=2, pady=10)
+    center_window(dlgEditReplace, 310, 160)
+    lblFind = Label(dlgEditReplace, text="Find:")
+    lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=E)
+    txtFind = Entry(dlgEditReplace)
+    txtFind.grid(column=1, row=0, columnspan=2, pady=10)
     lblReplace = Label(dlgEditReplace, text="Replace:")
     lblReplace.grid(column=0, row=1, padx=10, pady=5)
     txtReplace = Entry(dlgEditReplace)
     txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=E)
-    btnReplaceSkip = Button(dlgEditReplace, text="Skip", command=lambda:
-        mnuEditReplaceNext(txtFindR.get()))
-    btnReplaceSkip.grid(column=0, row=2)
+    lblMatchCase = Label(dlgEditReplace, text="Match Case:")
+    lblMatchCase.grid(column=0, row=2, padx=10, pady=5, sticky=E)
+    chkMatchCase = Checkbutton(dlgEditReplace, variable=boolMatchCase, offvalue=False, onvalue=True)
+    chkMatchCase.deselect() # Start out unchecked
+    chkMatchCase.grid(column=1, row=2, sticky=W)
+    btnReplaceFindAll = Button(dlgEditReplace, text="Mark All",
+        command=mnuEditFindFindAll)
+    btnReplaceFindAll.grid(column=2, row=2, sticky=E)
+
+    btnReplaceFind = Button(dlgEditReplace, text="Find",
+        command=mnuEditReplaceFind)
+    btnReplaceFind.grid(column=0, row=3)
     btnEditReplaceNext = Button(dlgEditReplace, text="Replace",
         command=mnuEditReplaceNext)
-    btnEditReplaceNext.grid(column=1, row=2, pady=5, sticky=W)
+    btnEditReplaceNext.grid(column=1, row=3, pady=5, sticky=W)
     btnEditReplaceCancel = Button(dlgEditReplace, text="Cancel",
         command=mnuEditReplaceCancel)
-    btnEditReplaceCancel.grid(column=2, row=2, pady=5, sticky=E)
-    txtFindR.focus()
+    btnEditReplaceCancel.grid(column=2, row=3, pady=5, sticky=E)
+    txtFind.focus()
     dlgEditReplace.resizable(False, False)
-    #dlgEditReplace.attributes('-toolwindow', True)
-    #dlgEditReplace.overrideredirect(True)
     dlgEditReplace.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgEditReplace)) # intercept close button
     dlgEditReplace.transient(root)   # dialog window is related to main
     # Still need to remove min/max buttons and keep the X button
     dlgEditReplace.wait_visibility() # can't grab until window appears, so we wait
-    dlgEditReplace.grab_set()        # ensure all input goes to our window
+#    dlgEditReplace.grab_set()        # ensure all input goes to our window
     dlgEditReplace.wait_window()     # block until window is destroyed
-def mnuEditReplaceSkip(e=None):
-    # TODO:
-    dlgDismiss(dlgEditReplace)
+def mnuEditReplaceFind(e=None):
+    global dlgEditReplace, txtFind, searchStart
+    # Remove tag "found" from index 1 to END
+    editor_text.tag_remove("sel", "1.0", END)
+    search_text = txtFind.get()
+    if (search_text):
+        cur_index = searchStart
+        # searches for desired string from index searchStart
+        cur_index = editor_text.search(search_text, cur_index,
+            nocase=boolMatchCase, stopindex=END)
+        if cur_index:
+            # Scroll the searched text into view
+            editor_text.see(cur_index)
+            # Last index sum of current index and length of editor_text
+            next_index = "% s+% dc" % (cur_index, len(search_text))
+            # Move cursor to end of selected text
+            editor_text.mark_set(INSERT, next_index)
+            txtFind.select_range(0, END)
+            txtFind.focus_set()
+            editor_text.focus_set() # Focus before selecting
+            # Mark located string as "selected"
+            editor_text.tag_add("sel", cur_index, next_index)
+            searchStart = next_index
+        else: # Not found so prepare to search again from the top
+            searchStart = "1.0" # Allow search to wrap around
+            txtFind.select_range(0, END)
+            txtFind.focus_set()
+    else: # Search empty so start from the top
+        searchStart = "1.0"
+        txtFind.focus_set()
 def mnuEditReplaceNext(e=None):
-    # TODO:
-    dlgDismiss(dlgEditReplace)
+    global dlgEditReplace, txtFind, txtReplace, searchStart
+    # Remove tag "found" from index 1 to END
+    editor_text.tag_remove("sel", "1.0", END)
+    search_text = txtFind.get()
+    replace_text = txtReplace.get()
+    if (search_text): # replace_text can be empty to do mass deletes
+        cur_index = searchStart
+        # Searches for desired string from index searchStart
+        cur_index = editor_text.search(search_text, cur_index,
+            nocase=boolMatchCase, stopindex=END)
+        if cur_index:
+            editor_text.see(cur_index)
+            # last index sum of current index and length of editor_text
+            next_index = "% s+% dc" % (cur_index, len(search_text))
+            editor_text.delete(cur_index, next_index)
+            editor_text.insert(cur_index, replace_text)
+            # overwrite "Found" at cur_index
+            next_index = "% s+% dc" % (cur_index, len(replace_text))
+            txtFind.select_range(0, END)
+            txtReplace.select_range(0, END)
+            txtReplace.focus_set()
+            editor_text.focus_set() # Focus before selecting
+            # mark located string as "selected"
+            editor_text.tag_add("sel", cur_index, next_index)
+            searchStart = next_index
+        else: # Not found so prepare to search again from the top
+            searchStart = "1.0" # Allow search to wrap around
+            txtFind.select_range(0, END)
+            txtReplace.select_range(0, END)
+            txtFind.focus_set()
+            editor_text.focus_set()
+    else: # Search empty so start from the top
+        searchStart = "1.0"
+        txtFind.focus_set()
+def mnuEditFindFindAll(e=None):
+    global dlgEditReplace, txtFind
+    # remove tag "found" from index 1 to END
+    editor_text.tag_remove("found", "1.0", END)
+    search_text = txtFind.get()
+    if (search_text):
+        cur_index = "1.0"
+        # Use editor_text.see(INDEX) to move view
+        cur_cursor = editor_text.index(INSERT)
+        cur_end = editor_text(END)
+        while True:
+            # searches for desired string from index 1
+            cur_index = editor_text.search(search_text, cur_index,
+                nocase=boolMatchCase, stopindex=END)
+            if not cur_index: break
+            editor_text.see(cur_index)
+            # last index sum of current index and length of editor_text
+            next_index = "% s+% dc" % (cur_index, len(search_text))
+            # overwrite "Found" at cur_index
+            editor_text.tag_add("found", cur_index, next_index)
+            # Move cursor to end of text
+            editor_text.mark_set(INSERT, next_index)
+            cur_index = next_index
+        # mark located string as "selected"
+        editor_text.tag_config("found",
+            foreground=editor_text["selectforeground"],
+            background=editor_text["selectbackground"])
+    txtFind.select_range(0, END)
+    txtFind.focus_set()
+    editor_text.focus_set()
 def mnuEditReplaceCancel(e=None):
-    # TODO:
+    global searchStart
+    searchStart = "1.0"
+    editor_text.tag_remove("found", "1.0", END)
     dlgDismiss(dlgEditReplace)
 
 def mnuSelectAll(e=None):
@@ -405,12 +525,20 @@ def mnuToolSort(e=None):
     global dlgToolSort
     dlgToolSort = Toplevel(root)
     dlgToolSort.title("Sort Hosts")
-    center_window(dlgToolSort, 300, 500)
+    center_window(dlgToolSort, 650, 300)
     # TODO:
+    lblWarning = Label(dlgToolSort, text="WARNING: All nonfunctional lines will be deleted!")
+    curfont = lblWarning["font"]
+    lblWarning.config(font=(curfont, 18), fg="red")
+    lblWarning.grid(row=0, column=0, columnspan=20, pady=5)
+    lblSortStartLine = Label(dlgToolSort, text="Start sort at Line: ")
+    lblSortStartLine.grid(row=1, column=0, pady=5, sticky=E)
+    lblSortEndLine = Label(dlgToolSort, text="End sort at Line: ")
+    lblSortEndLine.grid(row=2, column=0, pady=5, sticky=E)
 
     #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
-    #dlgToolSort.attributes('-toolwindow', True)
+    #dlgToolSort.attributes("-toolwindow", True)
     #dlgToolSort.overrideredirect(True)
     dlgToolSort.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolSort)) # intercept close button
@@ -429,7 +557,7 @@ def mnuToolFilter(e=None):
 
     #txtFindR.focus()
     #dlgToolFilter.resizable(False, False)
-    #dlgToolFilter.attributes('-toolwindow', True)
+    #dlgToolFilter.attributes("-toolwindow", True)
     #dlgToolFilter.overrideredirect(True)
     dlgToolFilter.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolFilter)) # intercept close button
@@ -452,9 +580,9 @@ def mnuToolFont(e=None):
     # On macOS, if you don't provide a font via the font configuration option,
     # your callbacks won't be invoked so always provide an initial font
     curfont = editor_text["font"]
-    dlgToolFont = root.tk.call('tk', 'fontchooser', 'configure',
-        '-font', f"{curfont} 10", '-command', root.register(fontChanged))
-    root.tk.call('tk', 'fontchooser', 'show')
+    dlgToolFont = root.tk.call("tk", "fontchooser", "configure",
+        "-font", f"{curfont} 10", "-command", root.register(fontChanged))
+    root.tk.call("tk", "fontchooser", "show")
 
 def dlgColorChange(self, editcolor):
     # https://www.youtube.com/watch?v=NDCirUTTrhg
@@ -470,7 +598,7 @@ def mnuToolColor(e=None):
     dlgToolColor.title("Editor Colors")
     center_window(dlgToolColor, 250, 260)
     # insertbackground needs to equal fg
-    # colorchooser.askcolor(initialcolor='#ff0000')
+    # colorchooser.askcolor(initialcolor="#ff0000")
     lblColorColorFg = Label(dlgToolColor, text="Foreground Color:")
     lblColorColorBg = Label(dlgToolColor, text="Background Color:")
     btnColorColorFg = Button(dlgToolColor, width=5,
@@ -503,7 +631,7 @@ def mnuToolColor(e=None):
     btnColorHiliteBg.grid(column=1, row=5, padx=(5,10), pady=10, sticky=W)
 
     dlgToolColor.resizable(False, False)
-    #dlgToolColor.attributes('-toolwindow', True)
+    #dlgToolColor.attributes("-toolwindow", True)
     #dlgToolColor.overrideredirect(True)
     dlgToolColor.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolColor)) # intercept close button
@@ -522,7 +650,7 @@ def mnuToolOptions(e=None):
 
     #txtFindR.focus()
     #dlgToolOptions.resizable(False, False)
-    #dlgToolOptions.attributes('-toolwindow', True)
+    #dlgToolOptions.attributes("-toolwindow", True)
     #dlgToolOptions.overrideredirect(True)
     dlgToolOptions.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolOptions)) # intercept close button
@@ -542,6 +670,9 @@ def editorUpdate(e=None):    # Check to see if there are unsaved changes
     # Update status bar with cursor position
     cursortxt = "Cursor: " + editor_text.index(INSERT)
     statusBarCursor.config(text=cursortxt)
+    if editor_text.get("1.0", END) == "":
+        editor_text.edit_modified(False)
+    fileUnsavedChanges = editor_text.edit_modified() # Has anything changed?
     # Regardless of e.state, editor_text changes
     if e.keysym == "Return":
         pass
@@ -557,7 +688,11 @@ def editorUpdate(e=None):    # Check to see if there are unsaved changes
     # (Num_Lock == OFF && KP_Delete)
     if e.keysym == "Delete" and editor_text.index(INSERT) == 1.0:
         pass
-    statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
+    #statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
+    if fileUnsavedChanges:
+        statusBar.config(text="Modified")
+    else:
+        statusBar.config(text="Status Bar")
 
 # I'm Considering storing HOSTS entries in a DB or CSV
 #sqdb = sqlite3.connect("hosts.db")
@@ -581,12 +716,6 @@ editor_text = Text(editor_frame, width=20, height=20, wrap="none", undo=True,
     xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
 # Default to Dark Mode
 editor_text.config(fg="white", bg="black", insertbackground="white", insertwidth=2)
-
-editor_text.bind("<Button-3>", rightClickMenu)
-# Any time the cursor moves in the text box, set cursor pos in the status bar:
-#editor_text.bind("<Configure>", editorUpdate) # Doesn't work yet
-editor_text.bind("<KeyRelease>", editorUpdate)
-#editor_text.pack needs to be added AFTER StatusBar is added
 
 editor_text.pack(expand=TRUE, fill=BOTH) # Must be last to AutoResize properly
 
@@ -621,8 +750,8 @@ mnuEdit.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerator="(Ct
 mnuEdit.add_command(label="Copy", command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
 mnuEdit.add_command(label="Paste", command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
 mnuEdit.add_separator()
-mnuEdit.add_command(label="Find...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
-mnuEdit.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
+mnuEdit.add_command(label="Find & Replace...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
+#mnuEdit.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+H)")
 
 textWrap = StringVar()
 textWrap.set(editor_text["wrap"])
@@ -652,8 +781,8 @@ mnuRightClick.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerato
 mnuRightClick.add_command(label="Copy", command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
 mnuRightClick.add_command(label="Paste", command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
 mnuRightClick.add_separator()
-mnuRightClick.add_command(label="Find...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
-mnuRightClick.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
+mnuRightClick.add_command(label="Find & Replace...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
+#mnuRightClick.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
 mnuRightClick.add_cascade(label="Text Wrap", menu=mnuRightWrap) # Radio between [none, char, word]
 # Might be a bug that we can't use mnuToolWrap above instead of having to rebuild it below
 mnuRightWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
@@ -711,15 +840,18 @@ editor_text.bind("<Control-Key-O>", mnuFileOpenSys)
 editor_text.bind("<Control-Key-s>", mnuFileSave)
 editor_text.bind("<Control-Key-S>", mnuFileSaveAs)
 editor_text.bind("<Control-Key-q>", mnuFileExit)
-#root.bind("<Control-Key-z>", mnuEditUndo)
-#root.bind("<Control-Key-y>", mnuEditRedo)
+#editor_text.bind("<Control-Key-z>", mnuEditUndo)
+#editor_text.bind("<Control-Key-y>", mnuEditRedo)
 editor_text.bind("<Control-Key-a>", mnuSelectAll)
 editor_text.bind("<Control-Key-i>", mnuInsertFile)
 editor_text.bind("<Control-Key-x>", mnuEditCut)
 editor_text.bind("<Control-Key-c>", mnuEditCopy)
 editor_text.bind("<Control-Key-v>", mnuEditPaste)
 editor_text.bind("<Control-Key-f>", mnuEditFind)
-editor_text.bind("<Control-Key-h>", mnuEditReplace)
+#editor_text.bind("<Control-Key-h>", mnuEditReplace)
+editor_text.bind("<Button-3>", rightClickMenu)
+# Any time the cursor moves in the text box, set cursor pos in the status bar:
+editor_text.bind("<KeyRelease>", editorUpdate)
 
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
@@ -735,6 +867,8 @@ statusBar = Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief
 statusBar.grid(column=1, row=0, sticky=W+E)
 statusBarWrap = Label(statusBarRoot, text="Wrap: None", padx=5, pady=3, bd=1, relief=SUNKEN)
 statusBarWrap.grid(column=4, row=0, sticky=W+E)
+statusBarGrip = ttk.Sizegrip(statusBarRoot)
+statusBarGrip.grid(column=5, row=0, sticky=W+E, padx=(10,0), pady=(10,0))
 #statusBarCursor.config(textvariable=editor_text.index(INSERT)) # Testing stuff
 
 #statusTheme.bind("<<ComboboxSelected>>", lambda e:quickTheme(statusTheme.get()))
@@ -747,7 +881,8 @@ editor_frame.pack(expand=TRUE, fill=BOTH)
 #sqdb.close()
 
 # Now we get to the meat and potatoes!
-if __name__ == '__main__':
+if __name__ == "__main__":
+    searchStart = "1.0"
     center_window(root, 800, 600, False)
     detectHosts()
     #mnuDisableWhenEmpty(True)
