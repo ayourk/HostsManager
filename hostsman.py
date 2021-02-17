@@ -85,11 +85,15 @@ def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
         geometry_text = f"{dlg_width}x{dlg_height}+{dlgapp_left}+{dlgapp_top}"
     curwind.geometry(geometry_text)
 
-def dlgDismiss(dlgWindow):
+# Tried to use single dispatch, but it didn't go over too well.
+# https://docs.python.org/3/library/functools.html#functools.singledispatch
+def dlgDismiss(dlgWindow=None):
     global searchStart
     searchStart = "1.0"
     dlgWindow.grab_release()
     dlgWindow.destroy()
+def dlgDismissEvent(e=None):
+    dlgDismiss(e.widget)
 
 
 # File menu globals
@@ -191,7 +195,7 @@ def mnuFileMerge2(e=None):    # Custom dialog version (TODO)
     if fileMainFilename == "" or fileMainFilename == ():
         return
     text_file = open(fileMainFilename, "r")
-    hosts_contents = text_file.read()
+    hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
     editor_text.insert(END, "\r\n")
     editor_text.insert(END, hosts_contents)
     text_file.close()
@@ -410,12 +414,14 @@ def mnuEditFind(e=None): # Used to be mnuEditReplace
     btnEditReplaceCancel.grid(column=2, row=3, pady=5, sticky=E)
     txtFind.focus()
     dlgEditReplace.resizable(False, False)
+    # See http://tkinter.programujte.com/tkinter-dialog-windows.htm
+    dlgEditReplace.bind("<Return>", mnuEditReplaceFind)
+    dlgEditReplace.bind("<Escape>", mnuEditReplaceCancel)
     dlgEditReplace.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgEditReplace)) # intercept close button
     dlgEditReplace.transient(root)   # dialog window is related to main
     # Still need to remove min/max buttons and keep the X button
     dlgEditReplace.wait_visibility() # can't grab until window appears, so we wait
-#    dlgEditReplace.grab_set()        # ensure all input goes to our window
     dlgEditReplace.wait_window()     # block until window is destroyed
 def mnuEditReplaceFind(e=None):
     global dlgEditReplace, txtFind, searchStart
@@ -538,6 +544,8 @@ def mnuToolSort(e=None):
 
     #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
+    #dlgToolSort.bind("<Return>", mnuEditReplaceFind)
+    dlgToolSort.bind("<Escape>", dlgDismissEvent)
     #dlgToolSort.attributes("-toolwindow", True)
     #dlgToolSort.overrideredirect(True)
     dlgToolSort.protocol("WM_DELETE_WINDOW",
@@ -557,6 +565,8 @@ def mnuToolFilter(e=None):
 
     #txtFindR.focus()
     #dlgToolFilter.resizable(False, False)
+    #dlgToolFilter.bind("<Return>", mnuEditReplaceFind)
+    dlgToolFilter.bind("<Escape>", dlgDismissEvent)
     #dlgToolFilter.attributes("-toolwindow", True)
     #dlgToolFilter.overrideredirect(True)
     dlgToolFilter.protocol("WM_DELETE_WINDOW",
@@ -586,7 +596,7 @@ def mnuToolFont(e=None):
 
 def dlgColorChange(self, editcolor):
     # https://www.youtube.com/watch?v=NDCirUTTrhg
-    newcolor = colorchooser.askcolor(initialcolor=editor_text[editcolor])[1]
+    newcolor = colorchooser.askcolor(initialcolor=editor_text[editcolor], parent=self)[1]
     if newcolor == None:
         pass
     else:
@@ -631,6 +641,7 @@ def mnuToolColor(e=None):
     btnColorHiliteBg.grid(column=1, row=5, padx=(5,10), pady=10, sticky=W)
 
     dlgToolColor.resizable(False, False)
+    dlgToolColor.bind("<Escape>", dlgDismissEvent)
     #dlgToolColor.attributes("-toolwindow", True)
     #dlgToolColor.overrideredirect(True)
     dlgToolColor.protocol("WM_DELETE_WINDOW",
@@ -650,6 +661,8 @@ def mnuToolOptions(e=None):
 
     #txtFindR.focus()
     #dlgToolOptions.resizable(False, False)
+    #dlgToolOptions.bind("<Return>", mnuEditReplaceFind)
+    dlgToolOptions.bind("<Escape>", dlgDismissEvent)
     #dlgToolOptions.attributes("-toolwindow", True)
     #dlgToolOptions.overrideredirect(True)
     dlgToolOptions.protocol("WM_DELETE_WINDOW",
@@ -666,28 +679,15 @@ def mnuHelpAbout(e=None):
 def rightClickMenu(e=None):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
 
-def editorUpdate(e=None):    # Check to see if there are unsaved changes
+def editorUpdate(e=None):
+    # Useful info at https://tkdocs.com/shipman/event-handlers.html
+    # e.widget = item causing event
     # Update status bar with cursor position
     cursortxt = "Cursor: " + editor_text.index(INSERT)
     statusBarCursor.config(text=cursortxt)
     if editor_text.get("1.0", END) == "":
         editor_text.edit_modified(False)
     fileUnsavedChanges = editor_text.edit_modified() # Has anything changed?
-    # Regardless of e.state, editor_text changes
-    if e.keysym == "Return":
-        pass
-    # If we are at the start of the buffer and BackSpace is pressed,
-    # no change is made
-    if e.keysym == "BackSpace" and editor_text.index(INSERT) == 1.0:
-        pass
-    # If we are at the end of the buffer and Delete is pressed,
-    # no change is made
-    # "KP_Delete" registers as "Delete" when numlock is off or
-    # shift is pressed and numlock is on
-    # (Num_Lock == ON && KP_Decimal) == Delete ==
-    # (Num_Lock == OFF && KP_Delete)
-    if e.keysym == "Delete" and editor_text.index(INSERT) == 1.0:
-        pass
     #statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
     if fileUnsavedChanges:
         statusBar.config(text="Modified")
@@ -762,6 +762,7 @@ rootMenu.add_cascade(label="Tools", menu=mnuTool)
 mnuTool.add_command(label="Sort Hosts", command=mnuToolSort)
 mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
 mnuTool.add_cascade(label="Text Wrap", menu=mnuToolWrap) # Radio between [none, char, word]
+# See https://blog.tecladocode.com/how-to-add-menu-to-tkinter-app/
 mnuToolWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuToolWrap.add_radiobutton(label="Char", value="char", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuToolWrap.add_radiobutton(label="Word", value="word", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
@@ -833,25 +834,29 @@ def mnuEnable(fileOpened=None):
 #    except:
 #        pass
 
-# Main application key bindings:
-editor_text.bind("<Control-Key-n>", mnuFileNew)
-editor_text.bind("<Control-Key-o>", mnuFileOpen)
-editor_text.bind("<Control-Key-O>", mnuFileOpenSys)
-editor_text.bind("<Control-Key-s>", mnuFileSave)
-editor_text.bind("<Control-Key-S>", mnuFileSaveAs)
-editor_text.bind("<Control-Key-q>", mnuFileExit)
-#editor_text.bind("<Control-Key-z>", mnuEditUndo)
-#editor_text.bind("<Control-Key-y>", mnuEditRedo)
-editor_text.bind("<Control-Key-a>", mnuSelectAll)
-editor_text.bind("<Control-Key-i>", mnuInsertFile)
-editor_text.bind("<Control-Key-x>", mnuEditCut)
-editor_text.bind("<Control-Key-c>", mnuEditCopy)
-editor_text.bind("<Control-Key-v>", mnuEditPaste)
-editor_text.bind("<Control-Key-f>", mnuEditFind)
-#editor_text.bind("<Control-Key-h>", mnuEditReplace)
-editor_text.bind("<Button-3>", rightClickMenu)
 # Any time the cursor moves in the text box, set cursor pos in the status bar:
+editor_text.bind("<Activate>", editorUpdate)
+editor_text.bind("<ButtonRelease>", editorUpdate)
+editor_text.bind("<FocusIn>", editorUpdate)
+editor_text.bind("<KeyPress>", editorUpdate)
 editor_text.bind("<KeyRelease>", editorUpdate)
+# Main application key bindings:
+root.bind("<Control-Key-n>", mnuFileNew)
+root.bind("<Control-Key-o>", mnuFileOpen)
+root.bind("<Control-Key-O>", mnuFileOpenSys)
+root.bind("<Control-Key-s>", mnuFileSave)
+root.bind("<Control-Key-S>", mnuFileSaveAs)
+root.bind("<Control-Key-q>", mnuFileExit)
+#root.bind("<Control-Key-z>", mnuEditUndo)
+#root.bind("<Control-Key-y>", mnuEditRedo)
+root.bind("<Control-Key-a>", mnuSelectAll)
+root.bind("<Control-Key-i>", mnuInsertFile)
+root.bind("<Control-Key-x>", mnuEditCut)
+root.bind("<Control-Key-c>", mnuEditCopy)
+root.bind("<Control-Key-v>", mnuEditPaste)
+root.bind("<Control-Key-f>", mnuEditFind)
+#root.bind("<Control-Key-h>", mnuEditReplace)
+root.bind("<Button-3>", rightClickMenu)
 
 # Status bar
 statusBarRoot = Label(root, relief=SUNKEN)
