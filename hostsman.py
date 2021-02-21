@@ -23,11 +23,13 @@ import threading
 #
 
 # TODO:
-#        Finish special dialogs related to the purpose of this app (in progress)
-#           Make the Minimize button disappear or nonfunctional
-#        Perform the backend logic on editor_text with said dialogs
-#        Finish backend functionality for many of the dialogs
-#           Flesh out Sort, Filter, Options dialogs (in progress)
+#    Finish special dialogs related to the purpose of this app (in progress)
+#       Make the Minimize button disappear or nonfunctional
+#    Perform the backend logic on editor_text with said dialogs
+#    Finish backend functionality for many of the dialogs
+#       Flesh out Sort, Filter, Options dialogs (in progress)
+#    Add Line numbering feature (as an option) from:
+# https://stackoverflow.com/questions/16369470/tkinter-adding-line-number-to-text-widget
 
 root = tk.Tk()
 root.title("Hosts File Manager")
@@ -552,7 +554,7 @@ def mnuToolSort(e=None):
     beauStop = "%s.0" % (spinStop.get())
     btnToolSortBeautify = tk.Button(dlgToolSort,text="Beautify",command=lambda:
         threading.Thread(
-            mnuToolSortBeautify(
+            hostsBeautify(
                 None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get()))).start())
     btnToolSortBeautify.grid(row=3, column=1)
 
@@ -570,155 +572,73 @@ def mnuToolSort(e=None):
     #dlgToolSort.grab_set()        # ensure all input goes to our window
     dlgToolSort.wait_window()     # block until window is destroyed
 
-def mnuToolSortBeautify(e=None, start_index="1.0", end_index=tk.END, searchstr=""):
-    global dlgEditReplace, txtFind, spinStart, spinStop
-    # remove tag "found" from index 1 to tk.END
-    #editor_text.tag_remove("badspace", "1.0", tk.END)
-    # Regex's to match (in order of operations):
-    #   leading_spaces = "^[ \t]+" or "^\s+"
-    #   blank_lines = "^#.*$" # including comments!
-    #   extra_spaces = "\[ \t][ \t]+" or "\s\s+"
-#    start_index = spinStart.get()
-#    end_index = spinStop.get()
+def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
     match_length = tk.IntVar()
-    leading_spaces = r"^\s+"
-    commented_lines = r"^\#.*$" # including comments!
-    extra_spaces = r"[^\S\r\n]\s+"
-    #extra_spaces = r"[^\S\r\n][^\S\r\n]+"
-    trailing_spaces = r"[^\S\r\n]+$"
-    blank_lines = r"^$+"
-    match_length.set(0)
-    search_text = leading_spaces
-    cur_index = str(Decimal(start_index))
-    # Use editor_text.see(tk.INSERT) to move view
-    cur_cursor = editor_text.index(tk.INSERT)
     cur_end = editor_text.index(tk.END)
     if (Decimal(cur_end) > Decimal(end_index)):
         cur_end = str(Decimal(end_index))
-    statusBar.config(text="BeauPart 1")
+    cur_index = str(Decimal(start_index))
     while Decimal(cur_index) <= Decimal(cur_end):
-        # searches for desired string from index 1
-        try:
-            cur_index = editor_text.search(search_text, cur_index,
+        try: # Consecutive spaces/tabs
+            cur_index = editor_text.search(r"[ \t][ \t]+", cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp0:
-            cur_index = ""
-            print("exp0: " + exp0)
             break
         if not cur_index or match_length.get() == 0: break
-        editor_text.see(cur_index)
-        # last index sum of current index and length of editor_text
-        next_index = "%s+%sc" % (cur_index, match_length.get())
-        text_to_delete = editor_text.get(cur_index, next_index)
+        # We don't want to delete all spaces so offset by -1
+        next_index = "%s+%sc" % (cur_index, match_length.get()-1)
         editor_text.delete(cur_index, next_index)
-        #cur_index = next_index
-    match_length.set(0)
-    search_text = commented_lines
     cur_index = str(Decimal(start_index))
-    # Use editor_text.see(tk.INSERT) to move view
-    cur_cursor = editor_text.index(tk.INSERT)
-    cur_end = editor_text.index(tk.END)
-    if (Decimal(cur_end) > Decimal(end_index)):
-        cur_end = str(Decimal(end_index))
-    statusBar.config(text="BeauPart 2")
     while Decimal(cur_index) <= Decimal(cur_end):
-        # searches for desired string from index 1
-        try:
-            cur_index = editor_text.search(search_text, cur_index,
+        try: # Leading spaces/tabs
+            cur_index = editor_text.search(r"^[ \t]]+", cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp1:
-            cur_index = ""
-            print("exp1: " + exp1)
             break
         if not cur_index or match_length.get() == 0: break
-        editor_text.see(cur_index)
-        # last index sum of current index and length of editor_text
         next_index = "%s+%sc" % (cur_index, match_length.get())
-        text_to_delete = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
-        #cur_index = next_index
-    match_length.set(0)
-    search_text = extra_spaces
     cur_index = str(Decimal(start_index))
-    # Use editor_text.see(tk.INSERT) to move view
-    cur_cursor = editor_text.index(tk.INSERT)
-    cur_end = editor_text.index(tk.END)
-    if (Decimal(cur_end) > Decimal(end_index)):
-        cur_end = str(Decimal(end_index))
-    statusBar.config(text="BeauPart 3")
     while Decimal(cur_index) <= Decimal(cur_end):
         # searches for desired string from index 1
-        try:
-            cur_index = editor_text.search(search_text, cur_index,
+        try: # Trailing spaces/tabs
+            cur_index = editor_text.search(r"[ \t]+$", cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp2:
-            cur_index = ""
-            print("exp2: " + exp2)
             break
         if not cur_index or match_length.get() == 0: break
-        editor_text.see(cur_index)
-        # last index sum of current index and length of editor_text
         next_index = "%s+%sc" % (cur_index, match_length.get())
-        text_to_delete = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
-        #editor_text.insert(cur_index, "") # TODO: Still needs work
-        #cur_index = next_index
-    match_length.set(0)
-    search_text = trailing_spaces
     cur_index = str(Decimal(start_index))
-    # Use editor_text.see(tk.INSERT) to move view
-    cur_cursor = editor_text.index(tk.INSERT)
-    cur_end = editor_text.index(tk.END)
-    if (Decimal(cur_end) > Decimal(end_index)):
-        cur_end = str(Decimal(end_index))
-    statusBar.config(text="BeauPart 4")
     while Decimal(cur_index) <= Decimal(cur_end):
-        # searches for desired string from index 1
-        try:
-            cur_index = editor_text.search(search_text, cur_index,
+        try: # Comment lines
+            cur_index = editor_text.search(r"^\#.*$", cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp3:
-            cur_index = ""
-            print("exp3: " + exp3)
             break
         if not cur_index or match_length.get() == 0: break
-        editor_text.see(cur_index)
-        # last index sum of current index and length of editor_text
         next_index = "%s+%sc" % (cur_index, match_length.get())
-        text_to_delete = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
-        #cur_index = next_index
-    search_text = blank_lines
+    # Windows = "^\r\n"
+    # Linux/Unix/BSD/MacBSD = "^\n"
+    # MacOS = "^\r" (can be this)
+    #blank_lines = r"^\r?\n" # Not perfect but does the job most of the time.
     cur_index = str(Decimal(start_index))
-    # Use editor_text.see(tk.INSERT) to move view
-    cur_cursor = editor_text.index(tk.INSERT)
-    cur_end = editor_text.index(tk.END)
-    if (Decimal(cur_end) > Decimal(end_index)):
-        cur_end = str(Decimal(end_index))
-    statusBar.config(text="BeauPart 5")
     while Decimal(cur_index) <= Decimal(cur_end):
-        # searches for desired string from index 1
-        try:
-            cur_index = editor_text.search(search_text, cur_index,
+        try: # Blank lines
+            cur_index = editor_text.search(r"^\r?\n", cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp4:
-            cur_index = ""
-            print("exp4: " + exp4)
             break
-        if not cur_index: break
-        editor_text.see(cur_index)
-        # last index sum of current index and length of editor_text
-        next_index = "%s+%sc" % (cur_index, match_length.get())
-        text_to_delete = editor_text.get(cur_index, next_index)
+        if not cur_index or match_length.get() == 0: break
+        next_index = "%s+%sc" % (cur_index, (match_length.get()))
         editor_text.delete(cur_index, next_index)
-        #cur_index = next_index
     # Done with all searches
-    statusBar.config(text="Beautify Done")
     editor_text.see(tk.INSERT)
 
 def mnuToolFilter(e=None):
@@ -752,7 +672,7 @@ def mnuToolFont(e=None):
     # Tkinter has not yet added a convenient way to use this font dialog,
     # so I have to use the Tcl API directly. You can see the latest work
     # towards a proper Python API and download code at [Issue#28694].
-    # On macOS, if you don't provide a font via the font configuration option,
+    # On MacOS, if you don't provide a font via the font configuration option,
     # your callbacks won't be invoked so always provide an initial font
     curfont = editor_text["font"]
     dlgToolFont = root.tk.call("tk", "fontchooser", "configure",
@@ -859,10 +779,6 @@ def editorUpdate(e=None):
         statusBar.config(text="Modified")
     else:
         statusBar.config(text="Status Bar")
-
-# I'm Considering storing HOSTS entries in a DB or CSV
-#sqdb = sqlite3.connect("hosts.db")
-#sqcur = sqdb.cursor()
 
 
 # Font info:  .metrics("fixed") == 1 - Fixed with fonts only
