@@ -3,6 +3,8 @@
 #%% <-- For Jupyter debugging
 import platform
 from decimal import Decimal
+import math
+import os
 #from tkinter import *
 import tkinter as tk
 #from tkinter.font import Font # https://www.youtube.com/watch?v=JIqE3RMCMFE
@@ -552,11 +554,14 @@ def mnuToolSort(e=None):
         pass
     beauStart = "%s.0" % (spinStart.get())
     beauStop = "%s.0" % (spinStop.get())
-    btnToolSortBeautify = tk.Button(dlgToolSort,text="Beautify",command=lambda:
-        threading.Thread(
-            hostsBeautify(
-                None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get()))).start())
+    btnToolSortBeautify = tk.Button(dlgToolSort, text="Beautify",
+        command=lambda: hostsBeautify(
+                None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
     btnToolSortBeautify.grid(row=3, column=1)
+    btnToolSortBeautify = tk.Button(dlgToolSort, text="Bubble Sort",
+        command=lambda: bubbleSort(
+                None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
+    btnToolSortBeautify.grid(row=3, column=2)
 
     #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
@@ -640,6 +645,48 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         editor_text.delete(cur_index, next_index)
     # Done with all searches
     editor_text.see(tk.INSERT)
+
+def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
+    # Variable prep:
+    startInt = math.floor(Decimal(start_index))
+    stopInt = math.floor(Decimal(end_index)) - 1
+    if (startInt >= stopInt):
+        return # Not enough lines to sort ( >= 3+ )
+    lineSwap = False
+    # Time to do the actual sort:
+    for outerLoop in range(startInt, stopInt):
+        lineSwap = False
+        for innerLoop in range(startInt, stopInt):
+            nextPos = innerLoop + 1
+            curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
+            nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
+            curList = curLine.splitlines()[0].split(" ", 3)
+            nextList = nextLine.splitlines()[0].split(" ", 3)
+            if curList == [""] or nextList == [""]:
+                break
+            if len(curList) < 2 or len(nextList) < 2 or \
+                    curList[0] != nextList[0]:
+                continue
+            # Only worry about comparing the host names
+            if curList[1] > nextList[1]:
+                lineSwap = True
+                editor_text.delete(f"{innerLoop}.0", f"{nextPos}.0")
+                editor_text.insert(f"{nextPos}.0", curLine)
+            elif curList[1] == nextList[1]: # Delete duplicate hosts
+                # Try to preserve end of line comments
+                if len(curList) == 2 and len(nextList) > 2:
+                    editor_text.delete(f"{innerLoop}.0", f"{nextPos}.0")
+                elif len(curList) >= 2 and len(nextList) == 2:
+                    editor_text.delete(f"{nextPos}.0", f"{nextPos+1}.0")
+                elif len(curList) > 2 and len(nextList) > 2:
+                    newline = os.linesep
+                    curList.append(nextList[2])
+                    curLine = " ".join(curList) + "\n" # os.linesep
+                    editor_text.delete(f"{innerLoop}.0", f"{nextPos+1}.0")
+                    editor_text.insert(f"{innerLoop}.0", curLine)
+        if not lineSwap: # If already sorted, skip further iterations.
+            break
+    pass
 
 def mnuToolFilter(e=None):
     global dlgToolFilter
