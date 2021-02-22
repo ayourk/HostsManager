@@ -658,11 +658,12 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
         lineSwap = False
         for innerLoop in range(startInt, stopInt):
             nextPos = innerLoop + 1
-            curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
-            nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
-            curList = curLine.splitlines()[0].split(" ", 3)
-            nextList = nextLine.splitlines()[0].split(" ", 3)
-            if curList == [""] or nextList == [""]:
+            try:
+                curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
+                nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
+                curList = curLine.splitlines()[0].split(" ", 3)
+                nextList = nextLine.splitlines()[0].split(" ", 3)
+            except Exception:
                 break
             if len(curList) < 2 or len(nextList) < 2 or \
                     curList[0] != nextList[0]:
@@ -686,7 +687,6 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
                     editor_text.insert(f"{innerLoop}.0", curLine)
         if not lineSwap: # If already sorted, skip further iterations.
             break
-    pass
 
 def mnuToolFilter(e=None):
     global dlgToolFilter
