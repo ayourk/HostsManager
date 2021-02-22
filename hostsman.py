@@ -556,12 +556,12 @@ def mnuToolSort(e=None):
     beauStop = "%s.0" % (spinStop.get())
     btnToolSortBeautify = tk.Button(dlgToolSort, text="Beautify",
         command=lambda: hostsBeautify(
-                None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
-    btnToolSortBeautify.grid(row=3, column=1)
+        spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
+    btnToolSortBeautify.grid(row=1, column=4)
     btnToolSortBeautify = tk.Button(dlgToolSort, text="Bubble Sort",
         command=lambda: bubbleSort(
-                None, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
-    btnToolSortBeautify.grid(row=3, column=2)
+        spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
+    btnToolSortBeautify.grid(row=2, column=4)
 
     #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
@@ -645,6 +645,11 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         editor_text.delete(cur_index, next_index)
     # Done with all searches
     editor_text.see(tk.INSERT)
+    # If the amount of lines change, we have a new EOF/max lines
+    oldEnd = int(math.floor(Decimal(end_index)))
+    newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
+    if oldEnd >= newEnd:
+        spinStartMax(e, newEnd)
 
 def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
     # Variable prep:
@@ -652,17 +657,20 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
     stopInt = math.floor(Decimal(end_index)) - 1
     if (startInt >= stopInt):
         return # Not enough lines to sort ( >= 3+ )
-    lineSwap = False
     # Time to do the actual sort:
     for outerLoop in range(startInt, stopInt):
-        lineSwap = False
+        lineSwap = False # Prepare to short circuit sorting
         for innerLoop in range(startInt, stopInt):
             nextPos = innerLoop + 1
             try:
                 curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
                 nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
                 curList = curLine.splitlines()[0].split(" ", 3)
-                nextList = nextLine.splitlines()[0].split(" ", 3)
+                nextListTest = nextLine.splitlines()
+                if nextListTest: # Sometimes it is an empty list!
+                    nextList = nextLine.splitlines()[0].split(" ", 3)
+                else:
+                    break
             except Exception:
                 break
             if len(curList) < 2 or len(nextList) < 2 or \
@@ -687,6 +695,11 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
                     editor_text.insert(f"{innerLoop}.0", curLine)
         if not lineSwap: # If already sorted, skip further iterations.
             break
+    # If the amount of lines change, we have a new EOF/max lines
+    oldEnd = int(math.floor(Decimal(end_index)))
+    newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
+    if oldEnd >= newEnd:
+        spinStartMax(e, newEnd)
 
 def mnuToolFilter(e=None):
     global dlgToolFilter
