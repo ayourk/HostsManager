@@ -552,8 +552,6 @@ def mnuToolSort(e=None):
             columnspan=2)
     except Exception as exp:
         pass
-    beauStart = "%s.0" % (spinStart.get())
-    beauStop = "%s.0" % (spinStop.get())
     btnToolSortBeautify = tk.Button(dlgToolSort, text="Beautify",
         command=lambda: hostsBeautify(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
@@ -563,11 +561,8 @@ def mnuToolSort(e=None):
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
     btnToolSortBeautify.grid(row=2, column=4)
 
-    #txtFindR.focus()
     #dlgToolSort.resizable(False, False)
-    #dlgToolSort.bind("<Return>", mnuEditReplaceFind)
     dlgToolSort.bind("<Escape>", dlgDismissEvent)
-    #dlgToolSort.attributes("-toolwindow", True)
     #dlgToolSort.overrideredirect(True)
     dlgToolSort.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolSort)) # intercept close button
