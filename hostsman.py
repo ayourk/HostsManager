@@ -688,7 +688,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END):
                 elif len(curList) >= 2 and len(nextList) == 2:
                     editor_text.delete(f"{nextPos}.0", f"{nextPos+1}.0")
                 elif len(curList) > 2 and len(nextList) > 2:
-                    newline = os.linesep
+                    # Consolidate the comments between the 2 lines
                     curList.append(nextList[2])
                     curLine = " ".join(curList) + "\n" # os.linesep
                     editor_text.delete(f"{innerLoop}.0", f"{nextPos+1}.0")
