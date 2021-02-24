@@ -887,14 +887,20 @@ def editorUpdate(e=None):
     #editor_text.see(tk.INSERT) # Keep cursor in current view
     cursortxt = "Cursor: " + editor_text.index(tk.INSERT)
     statusBarCursor.config(text=cursortxt)
-    if editor_text.get("1.0", tk.END) == "":
+    if editor_text.compare("end-1c", "==", "1.0"):
         editor_text.edit_modified(False)
+        mnuDisableWhenEmpty()
+    else:
+        mnuEnable()
+        mnuEnableUnReDo()
     fileUnsavedChanges = editor_text.edit_modified() # Has anything changed?
     #statusBar.config(text=f"{e.state} {e.keysym} {e.keycode}")
     if fileUnsavedChanges:
         statusBar.config(text="Modified")
+        mnuEnableUnReDo()
     else:
         statusBar.config(text="Status Bar")
+        mnuDisableUnReDo()
 
 
 # Font info:  .metrics("fixed") == 1 - Fixed with fonts only
@@ -930,7 +936,7 @@ rootMenu.add_cascade(label="File", menu=mnuFile, accelerator="(Ctrl+N)")
 mnuFile.add_command(label="New", command=lambda: mnuFileNew(0), accelerator="(Ctrl+N)")
 mnuFile.add_command(label="Open System Hosts", command=mnuFileOpenSys, accelerator="(Ctrl+Shift+O)")
 mnuFile.add_command(label="Open...", command=lambda: mnuFileOpen(0), accelerator="(Ctrl+O)")
-mnuFile.add_command(label="Merge", command=mnuFileMerge)
+#mnuFile.add_command(label="Merge", command=mnuFileMerge)
 mnuFile.add_command(label="Save", command=lambda: mnuFileSave(0), accelerator="(Ctrl+S)")
 mnuFile.add_command(label="Save As...", command=mnuFileSaveAs, accelerator="(Ctrl+Shift+S)")
 mnuFile.add_command(label="Revert", command=mnuFileRevert)
@@ -957,7 +963,7 @@ textWrap.set(editor_text["wrap"])
 mnuTool = tk.Menu(rootMenu, tearoff=False)
 mnuToolWrap = tk.Menu(mnuTool, tearoff=False)
 rootMenu.add_cascade(label="Tools", menu=mnuTool)
-mnuTool.add_command(label="Sort Hosts", command=mnuToolSort)
+mnuTool.add_command(label="Sort/Merge Hosts", command=mnuToolSort, accelerator="(Ctrl+Shift+M)")
 mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
 mnuTool.add_cascade(label="Text Wrap", menu=mnuToolWrap) # Radio between [none, char, word]
 # See https://blog.tecladocode.com/how-to-add-menu-to-tkinter-app/
@@ -991,24 +997,29 @@ mnuRightClick.add_separator()
 mnuRightClick.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 # By default, some menu items don't make sense to have enabled when the editor_text is empty
-def mnuDisableWhenEmpty(firstRun):
+def mnuDisableWhenEmpty(firstRun=False):
     global mnuFile, mnuEdit, mnuTool
     mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
     if fileMainFilename == "":
-        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
+#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
         mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
     mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
-    if firstRun:
-        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
-        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
     mnuEdit.entryconfig("Cut", state="disabled")        # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Copy", state="disabled")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find...", state="disabled")    # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Replace...", state="disabled") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort Hosts", state="disabled") # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Find & Replace...", state="disabled")    # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Sort/Merge Hosts", state="disabled") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
+
+def mnuDisableUnReDo(fileOpened=None):
+    if not editor_text.edit_modified():
+        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
+        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
+
+def mnuEnableUnReDo(fileOpened=None):
+    if editor_text.edit_modified():
+        mnuEdit.entryconfig("Undo", state="normal")       # Enabled upon editor_text change; enables Redo
 
 def mnuEnable(fileOpened=None):
     global mnuFile, mnuEdit, mnuTool
@@ -1016,14 +1027,13 @@ def mnuEnable(fileOpened=None):
     mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
     mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
     if fileMainFilename != "":
-        mnuFile.entryconfig("Merge", state="normal")      # Enable when fileMainFilename != ""
+#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
         mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
     mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Cut", state="normal")        # Enable when editor_text.get() != ""
     mnuEdit.entryconfig("Copy", state="normal")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find...", state="normal")    # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Replace...", state="normal") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort Hosts", state="normal") # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Find & Replace...", state="normal")    # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Sort/Merge Hosts", state="normal") # Enable when editor_text.get() != ""
     mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
 
 # Any time the cursor moves in the text box, set cursor pos in the status bar:
@@ -1048,6 +1058,7 @@ root.bind("<Control-Key-c>", mnuEditCopy)
 root.bind("<Control-Key-v>", mnuEditPaste)
 root.bind("<Control-Key-f>", mnuEditFind)
 #root.bind("<Control-Key-h>", mnuEditReplace)
+root.bind("<Control-Key-M>", mnuToolSort)
 root.bind("<Button-3>", rightClickMenu)
 
 # Status bar
@@ -1077,7 +1088,7 @@ if __name__ == "__main__":
     searchStart = "1.0"
     center_window(root, 800, 600, False)
     detectHosts()
-    #mnuDisableWhenEmpty(True)
+    mnuDisableWhenEmpty(True)
 
     editor_text.focus()
     #editor_text.insert(tk.END, font.families())
