@@ -155,12 +155,13 @@ def mnuFileOpenSys(e=None):
             editor_text.edit_modified(False)
             editor_text.mark_set(tk.INSERT, "1.0") # Move cursor to top
             editor_text.edit_reset() # Clear the undo stack
+            init_dir = str(fileMainFilename).rpartition(os.sep)[0]
             statusBarFile.config(text=fileMainFilename)
         except Exception as exp:
             tkmessagebox.showerror("ERROR", exp)
 
 def mnuFileOpen(e=None):
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     try:
         #fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
         fileMainFilename = tkfiledialog.askopenfilename(title="Open a Hosts file")
@@ -175,6 +176,7 @@ def mnuFileOpen(e=None):
         editor_text.edit_modified(False)
         editor_text.mark_set(tk.INSERT, "1.0") # Move cursor to top
         editor_text.edit_reset() # Clear the undo stack
+        init_dir = str(fileMainFilename).rpartition(os.sep)[0]
         statusBarFile.config(text=fileMainFilename)
     except Exception as exp:
         tkmessagebox.showerror("ERROR", exp)
@@ -210,7 +212,7 @@ def mnuFileMerge2(e=None):    # Custom dialog version (TODO)
     fileUnsavedChanges = True
 
 def mnuInsertFile(e=None):   # Resides under the Edit menu
-    global fileUnsavedChanges
+    global fileUnsavedChanges, init_dir
     try:
         fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Insert a file")
         if fileMainFilename == "" or fileMainFilename == ():
@@ -221,6 +223,7 @@ def mnuInsertFile(e=None):   # Resides under the Edit menu
         editor_text.insert(curpos, hosts_contents)
         text_file.close()
         fileUnsavedChanges = True
+        init_dir = str(fileMainFilename).rpartition(os.sep)[0]
         editor_text.see(tk.INSERT) # Move cursor into view
     except Exception as exp:
         tkmessagebox.showerror("ERROR", exp)
@@ -233,6 +236,8 @@ def mnuFileSave(e=None):
                 initialdir=init_dir,
                 initialfile="hosts-custom.txt",
                 title="Save Hosts file")
+            if fileMainFilename != () and fileMainFilename != "":
+                init_dir = str(fileMainFilename).rpartition(os.sep)[0]
         if fileMainFilename == "" or fileMainFilename == ():
             return
         text_file = open(fileMainFilename, "w+")
@@ -244,7 +249,7 @@ def mnuFileSave(e=None):
         tkmessagebox.showerror("ERROR", exp)
 
 def mnuFileSaveAs(e=None):
-    global fileUnsavedChanges, fileMainFilename
+    global fileUnsavedChanges, fileMainFilename, init_dir
     try:
         fileMainFilename = tkfiledialog.asksaveasfilename(
             initialdir=init_dir,
@@ -256,6 +261,7 @@ def mnuFileSaveAs(e=None):
         text_file.write(editor_text.get(1.0, tk.END))
         fileUnsavedChanges = False
         editor_text.edit_modified(False)
+        init_dir = str(fileMainFilename).rpartition(os.sep)[0]
         statusBarFile.config(text=f"Saved As: {fileMainFilename}")
     except Exception as exp:
         tkmessagebox.showerror("ERROR", exp)
@@ -539,10 +545,8 @@ def mnuToolSort(e=None):
     # Now to create the dependent spinboxes
     start_line = tk.IntVar()
     stop_line = tk.IntVar()
-    pass_line = tk.IntVar()
     start_line.set(1)
     stop_line.set(lastline)
-    pass_line.set(lastline)
     spinStart = None
     spinStop = None
     try:
@@ -554,14 +558,9 @@ def mnuToolSort(e=None):
             from_=int(start_line.get()), to=int(lastline),
             textvariable=stop_line,
             command=lambda:spinStartMax(spinStart, stop_line.get()))
-        spinPasses = tk.Spinbox(dlgToolSort, increment=1,
-            from_=int(start_line.get()), to=int(lastline),
-            textvariable=pass_line)
         spinStart.grid(row=1, column=1, pady=5, sticky=tk.W,
             columnspan=2)
         spinStop.grid(row=2, column=1, pady=5, sticky=tk.W,
-            columnspan=2)
-        spinPasses.grid(row=3, column=1, pady=5, sticky=tk.W,
             columnspan=2)
     except Exception as exp:
         pass
@@ -573,14 +572,11 @@ def mnuToolSort(e=None):
         command=lambda: hostsBeautify(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
     btnToolSortBeautify.grid(row=1, column=4)
-    btnToolSortBeautify = tk.Button(dlgToolSort, text="Bubble Sort",
-        command=lambda: threading.Thread(bubbleSort(
-        spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get()),
-        pass_line.get())).start())
-    btnToolSortBeautify.grid(row=2, column=4)
-    btnToolSortBeautify = tk.Button(dlgToolSort, text="Cancel Sort",
-        command=lambda: stopNOW.set(True))
-    btnToolSortBeautify.grid(row=2, column=6)
+    btnToolSort = tk.Button(dlgToolSort, text="Sort Hosts",
+        command=lambda: threading.Thread(mypySort(
+        spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())
+        )).start())
+    btnToolSort.grid(row=2, column=4)
 
     #dlgToolSort.resizable(False, False)
     dlgToolSort.bind("<Escape>", dlgDismissEvent)
@@ -599,75 +595,23 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
     if (Decimal(cur_end) > Decimal(end_index)):
         cur_end = str(Decimal(end_index))
     cur_index = str(Decimal(start_index))
+    combined_regexp = r"[ \t][ \t]+|^[ \t]]+|[ \t]+$|^\#.*$|^\r?\n"
     while Decimal(cur_index) <= Decimal(cur_end):
         dlgToolSort.update_idletasks()
         root.update_idletasks()
-        try: # Consecutive spaces/tabs
-            cur_index = editor_text.search(r"[ \t][ \t]+", cur_index,
+        try:
+            cur_index = editor_text.search(combined_regexp, cur_index,
                 count=match_length, regexp=True,
                 nocase=1, stopindex=cur_end)
         except Exception as exp0:
             break
         if not cur_index or match_length.get() == 0: break
-        # We don't want to delete all spaces so offset by -1
-        next_index = "%s+%sc" % (cur_index, match_length.get()-1)
-        editor_text.delete(cur_index, next_index)
-    cur_index = str(Decimal(start_index))
-    while Decimal(cur_index) <= Decimal(cur_end):
-        dlgToolSort.update_idletasks()
-        root.update_idletasks()
-        try: # Leading spaces/tabs
-            cur_index = editor_text.search(r"^[ \t]]+", cur_index,
-                count=match_length, regexp=True,
-                nocase=1, stopindex=cur_end)
-        except Exception as exp1:
-            break
-        if not cur_index or match_length.get() == 0: break
         next_index = "%s+%sc" % (cur_index, match_length.get())
+        found_text = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
-    cur_index = str(Decimal(start_index))
-    while Decimal(cur_index) <= Decimal(cur_end):
-        dlgToolSort.update_idletasks()
-        root.update_idletasks()
-        try: # Trailing spaces/tabs
-            cur_index = editor_text.search(r"[ \t]+$", cur_index,
-                count=match_length, regexp=True,
-                nocase=1, stopindex=cur_end)
-        except Exception as exp2:
-            break
-        if not cur_index or match_length.get() == 0: break
-        next_index = "%s+%sc" % (cur_index, match_length.get())
-        editor_text.delete(cur_index, next_index)
-    cur_index = str(Decimal(start_index))
-    while Decimal(cur_index) <= Decimal(cur_end):
-        dlgToolSort.update_idletasks()
-        root.update_idletasks()
-        try: # Comment lines
-            cur_index = editor_text.search(r"^\#.*$", cur_index,
-                count=match_length, regexp=True,
-                nocase=1, stopindex=cur_end)
-        except Exception as exp3:
-            break
-        if not cur_index or match_length.get() == 0: break
-        next_index = "%s+%sc" % (cur_index, match_length.get())
-        editor_text.delete(cur_index, next_index)
-    # Windows = "^\r\n"
-    # Linux/Unix/BSD/MacBSD = "^\n"
-    # MacOS = "^\r" (can be this)
-    #blank_lines = r"^\r?\n" # Not perfect but does the job most of the time.
-    cur_index = str(Decimal(start_index))
-    while Decimal(cur_index) <= Decimal(cur_end):
-        dlgToolSort.update_idletasks()
-        root.update_idletasks()
-        try: # Blank lines
-            cur_index = editor_text.search(r"^\r?\n", cur_index,
-                count=match_length, regexp=True,
-                nocase=1, stopindex=cur_end)
-        except Exception as exp4:
-            break
-        if not cur_index or match_length.get() == 0: break
-        next_index = "%s+%sc" % (cur_index, (match_length.get()))
-        editor_text.delete(cur_index, next_index)
+        # One space is fine but not more than 1
+        if found_text.startswith(" ") or found_text.startswith("\t"):
+            editor_text.insert(cur_index, " ")
     # Done with all searches
     editor_text.see(tk.INSERT)
     # If the amount of lines change, we have a new EOF/max lines
@@ -737,11 +681,10 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
         spinStartMax(e, newEnd)
 
 def linekey(entry):
-    if len(entry) < 2:
+    if entry is None or len(entry) < 2:
         return ""
     return entry[1]
 def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
-    global stopNOW
     # Variable prep:
     startInt = math.floor(Decimal(start_index))
     stopInt = math.floor(Decimal(end_index)) - 1
@@ -750,14 +693,16 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     stopNOW.set(False)
     if (startInt >= stopInt):
         return # Not enough lines to sort ( >= 3+ )
-    list2sort = []
+    list2sort = [None] * (stopInt+1)
     # Read all of the lines into lists:
     for innerLoop in range(startInt, stopInt+1):
         nextPos = innerLoop + 1
         try:
             curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
+            # Sometimes the last line doesn't have a newline:
+            if not curLine.endswith("\n"): curLine += "\n"
             curListTest = curLine.splitlines()
-            if curListTest and not stopNOW.get(): # Sometimes it is an empty list!
+            if curListTest: # Sometimes it is an empty list!
                 curList = curListTest[0].split(" ", 3)
             else: # Design feature: Blank lines will cause sorting to stop
                 break
@@ -766,30 +711,46 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
         list2sort[innerLoop] = curList
     # Time to do the actual (fast) sort:
     sortedLines = sorted(list2sort, key=linekey)
-    list2sort = [] # Empty unsorted list
+    list2sort = None # Empty unsorted list
     # Now check for duplicates:
     for innerLoop in range(startInt, stopInt):
         nextPos = innerLoop + 1
+        if innerLoop >= len(sortedLines) or nextPos >= len(sortedLines):
+            break
         if len(sortedLines[innerLoop]) <2 or len(sortedLines[nextPos]) <2 or \
-                sortedLines[innerLoop][0] != sortedLines[nextPos][0]:
+                sortedLines[innerLoop][0] != sortedLines[nextPos][0] or \
+                sortedLines[innerLoop] is None or sortedLines[nextPos] is None:
             continue
-        if sortedLines[innerLoop][1] == sortedLines[innerLoop][1]:
+        if sortedLines[innerLoop][1] == sortedLines[nextPos][1]:
             # Try to preserve end of line comments
-            if len(sortedLines[innerLoop]) == 2 and len(sortedLines[nextPos]) > 2:
-                sortedLines.remove(innerLoop)
-            elif len(sortedLines[innerLoop]) >= 2 and len(sortedLines[nextPos]) == 2:
-                sortedLines.remove(nextPos)
-            elif len(sortedLines[innerLoop]) > 2 and len(sortedLines[nextPos]) > 2:
+            if len(sortedLines[innerLoop])==2 and len(sortedLines[nextPos])>2:
+                sortedLines.pop(innerLoop)
+            elif len(sortedLines[innerLoop])>= 2 and \
+                    len(sortedLines[nextPos])==2:
+                sortedLines.pop(nextPos)
+            elif len(sortedLines[innerLoop])>2 and len(sortedLines[nextPos])>2:
                 # Consolidate the comments between the 2 lines
                 allComments = " ".join([sortedLines[innerLoop][2], sortedLines[nextPos][2]])
                 sortedLines[innerLoop][2] = allComments
-                sortedLines.remove(nextPos)
+                sortedLines.pop(nextPos)
+    sortedList = [None] * (stopInt+1)
+    if len(sortedLines) < stopInt:
+        stopInt = len(sortedLines)
     # Now put it back into the editor_text:
-    sortedList = []
-    for innerLoop in range(startInt, stopInt):
-        sortedList[innerLoop] = " ".join(sortedLines[innerLoop])
-    editor_text.delete(f"{startInt}.0", f"{stopInt+1}.0")
-    editor_text.insert(f"{startInt}.0", "\n".join(sortedList))
+    for innerLoop in range(startInt, stopInt+1):
+        if innerLoop < len(sortedLines):
+            sortedList[innerLoop] = " ".join(sortedLines[innerLoop])
+    sortedLines = sortedList[startInt:stopInt+1]
+    sortedList = [elem for elem in sortedLines if elem is not None]
+    sortedLines = None
+    dlgToolSort.update_idletasks()
+    editor_text.delete(start_index, end_index)
+    dlgToolSort.update_idletasks()
+    if start_index == "1.0":
+        editor_text.insert(start_index, "\n".join(sortedList))
+    else:
+        editor_text.insert(start_index, "\n" + "\n".join(sortedList))
+    dlgToolSort.update_idletasks()
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
