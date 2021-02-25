@@ -206,6 +206,8 @@ def mnuInsertFile(e=None, mergefile="", targetpos="", title="Insert a file"):
             fileMainFilename = mergefile
         if mergefile == " ":
             return fileMainFilename
+        if fileMainFilename == "" or fileMainFilename == ():
+            return ""
         text_file = open(fileMainFilename, "r")
         hosts_contents = text_file.read()
         if targetpos == "":
@@ -531,7 +533,7 @@ def spinStopMin(e=None, minline=1):
 def mnuToolSort(e=None):
     global dlgToolSort, spinStart, spinStop, sortProgress, btnToolSort, txtFileMerge
     dlgToolSort = tk.Toplevel(root)
-    dlgToolSort.title("Sort Hosts")
+    dlgToolSort.title("Sort/Merge Hosts")
     center_window(dlgToolSort, 650, 210)
     # TODO:
     # Figure out how many lines the currently loaded file is
@@ -619,7 +621,7 @@ def mnuToolSort(e=None):
 
     sortProgress.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X)
 
-    #dlgToolSort.resizable(False, False)
+    dlgToolSort.resizable(False, False)
     dlgToolSort.bind("<Escape>", dlgDismissEvent)
     #dlgToolSort.overrideredirect(True)
     dlgToolSort.protocol("WM_DELETE_WINDOW",
