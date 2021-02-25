@@ -5,7 +5,7 @@ import platform
 from decimal import Decimal
 import math
 import os
-#from tkinter import *
+import time
 import tkinter as tk
 #from tkinter.font import Font # https://www.youtube.com/watch?v=JIqE3RMCMFE
 from tkinter import colorchooser as tkcolorchooser
@@ -13,7 +13,6 @@ from tkinter import filedialog as tkfiledialog
 from tkinter import messagebox as tkmessagebox
 #from tkinter import scrolledtext as st
 from tkinter import ttk
-#import sqlite3
 import threading
 
 #
@@ -117,7 +116,6 @@ dlgToolColor = False
 dlgToolOptions = False
 dlgHelpAbout = False
 boolMatchCase = tk.BooleanVar()
-stopNOW = tk.BooleanVar()
 
 # Menu and related functions
 def mnuFileNew(e=None):
@@ -197,41 +195,38 @@ def mnuFileMerge(e=None):
     except Exception as exp:
         tkmessagebox.showerror("ERROR", exp)
 
-def mnuFileMerge2(e=None):    # Custom dialog version (TODO)
-    global fileUnsavedChanges
-    center_window(dlgFileMerge)
-    # TODO:
-    #fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
-    if fileMainFilename == "" or fileMainFilename == ():
-        return
-    text_file = open(fileMainFilename, "r")
-    hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
-    editor_text.insert(tk.END, "\r\n")
-    editor_text.insert(tk.END, hosts_contents)
-    text_file.close()
-    fileUnsavedChanges = True
-
-def mnuInsertFile(e=None):   # Resides under the Edit menu
+# Resides under the Edit menu (and Sort/Merge option)
+def mnuInsertFile(e=None, mergefile="", targetpos="", title="Insert a file"):
     global fileUnsavedChanges, init_dir
     try:
-        fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Insert a file")
-        if fileMainFilename == "" or fileMainFilename == ():
-            return
+        if mergefile == "" or mergefile == " ":
+            fileMainFilename = tkfiledialog.askopenfilename(
+                initialdir=init_dir, title=title)
+        else:
+            fileMainFilename = mergefile
+        if mergefile == " ":
+            return fileMainFilename
         text_file = open(fileMainFilename, "r")
         hosts_contents = text_file.read()
-        curpos = editor_text.index(tk.INSERT)
+        if targetpos == "":
+            curpos = editor_text.index(tk.INSERT)
+        else:
+            curpos = targetpos
         editor_text.insert(curpos, hosts_contents)
         text_file.close()
         fileUnsavedChanges = True
-        init_dir = str(fileMainFilename).rpartition(os.sep)[0]
         editor_text.see(tk.INSERT) # Move cursor into view
+        if mergefile == "":
+            init_dir = str(fileMainFilename).rpartition(os.sep)[0]
+        return fileMainFilename
     except Exception as exp:
         tkmessagebox.showerror("ERROR", exp)
+        return ""
 
 def mnuFileSave(e=None):
     global fileUnsavedChanges, fileMainFilename, init_dir
     try:
-        if fileMainFilename == "":
+        if fileMainFilename == "" or not os.access(fileMainFilename, os.W_OK):
             fileMainFilename = tkfiledialog.asksaveasfilename(
                 initialdir=init_dir,
                 initialfile="hosts-custom.txt",
@@ -513,70 +508,116 @@ def mnuEditReplaceCancel(e=None):
 def mnuSelectAll(e=None):
     editor_text.tag_add(tk.SEL, "1.0", tk.END)
 
+def mnuAddBrowse(e=None, fileName="", insertPos=""):
+    browseTitle = "Select a file to merge"
+    if fileName.strip() == "":
+        fileName = " "
+    fileName = mnuInsertFile(None, fileName, insertPos, browseTitle)
+    e.delete(0, tk.END)
+    e.insert(0, fileName)
+def mnuAddFromPos(e=None, insertPos=""):
+    if e.get().strip() == "":
+        mnuAddBrowse(e, "")
+    curFile = e.get().strip()
+    if curFile == "": # 2 chances before we abort.
+        return;
+    if insertPos == "": # Default to cursor position
+        insertPos = editor_text.index(tk.INSERT)
+    mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
 def spinStartMax(e=None, maxline=-1):
     e.config(to=maxline)
 def spinStopMin(e=None, minline=1):
     e.config(from_=minline)
-def fullStop():
-    global stopNOW;
-    stopNOW = True
 def mnuToolSort(e=None):
-    global dlgToolSort, spinStart, spinStop, stopNOW
+    global dlgToolSort, spinStart, spinStop, sortProgress, btnToolSort, txtFileMerge
     dlgToolSort = tk.Toplevel(root)
     dlgToolSort.title("Sort Hosts")
-    center_window(dlgToolSort, 650, 300)
+    center_window(dlgToolSort, 650, 210)
     # TODO:
-    lblWarning = tk.Label(dlgToolSort,
-        text="WARNING: All nonfunctional lines will be deleted!")
-    curfont = lblWarning["font"]
-    lblWarning.config(font=(curfont, 18), fg="red")
-    lblWarning.grid(row=0, column=0, padx=10, pady=5, sticky=tk.E,
-        columnspan=20)
-    lblSortStartLine = tk.Label(dlgToolSort, text="Start sort at Line: ")
-    lblSortStartLine.grid(row=1, column=0, pady=5, sticky=tk.E)
-    lblSortEndLine = tk.Label(dlgToolSort, text="End sort at Line: ")
-    lblSortEndLine.grid(row=2, column=0, pady=5, sticky=tk.E)
-    lblSortPasses = tk.Label(dlgToolSort, text="Sorting Passes: ")
-    lblSortPasses.grid(row=3, column=0, pady=5, sticky=tk.E)
     # Figure out how many lines the currently loaded file is
     cur_cursor = editor_text.index(tk.INSERT)
     cur_end = editor_text.index(tk.END)
     lastline = int(cur_end.split(".", 1)[0]) # "int" may be too small
-    # Now to create the dependent spinboxes
     start_line = tk.IntVar()
     stop_line = tk.IntVar()
     start_line.set(1)
     stop_line.set(lastline)
     spinStart = None
     spinStop = None
+    lblWarning = tk.Label(dlgToolSort,
+        text="WARNING: All nonfunctional lines will be deleted!")
+    curfont = lblWarning["font"]
+    lblWarning.config(font=(curfont, 18), fg="red")
+    lblSortRoot = tk.Label(dlgToolSort)
+    lblSortStartLine = tk.Label(lblSortRoot, text="Start sort at Line: ")
+    lblSortEndLine = tk.Label(lblSortRoot, text="Stop sort at Line: ")
+    # Now to create the dependent spinboxes
     try:
-        spinStart = tk.Spinbox(dlgToolSort, increment=1,
+        spinStart = tk.Spinbox(lblSortRoot, increment=1,
             from_=1, to=int(stop_line.get()),
             textvariable=start_line,
             command=lambda:spinStopMin(spinStop, start_line.get()))
-        spinStop = tk.Spinbox(dlgToolSort, increment=1,
+        spinStop = tk.Spinbox(lblSortRoot, increment=1,
             from_=int(start_line.get()), to=int(lastline),
             textvariable=stop_line,
             command=lambda:spinStartMax(spinStart, stop_line.get()))
-        spinStart.grid(row=1, column=1, pady=5, sticky=tk.W,
-            columnspan=2)
-        spinStop.grid(row=2, column=1, pady=5, sticky=tk.W,
-            columnspan=2)
     except Exception as exp:
         pass
-    #beauThread = threading.Thread(target=hostsBeautify(
-    #    spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
-    #beauThread = threading.Thread(target=bubbleSort(
-    #    spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
-    btnToolSortBeautify = tk.Button(dlgToolSort, text="Beautify",
+    btnToolSortBeautify = tk.Button(lblSortRoot, text="Beautify",
         command=lambda: hostsBeautify(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())))
-    btnToolSortBeautify.grid(row=1, column=4)
-    btnToolSort = tk.Button(dlgToolSort, text="Sort Hosts",
+    btnToolSort = tk.Button(lblSortRoot, text="Sort Hosts", state="disabled",
         command=lambda: threading.Thread(mypySort(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())
         )).start())
-    btnToolSort.grid(row=2, column=4)
+    lblMergeRoot = tk.Label(dlgToolSort)
+    lblMergeFile = tk.Label(lblMergeRoot, text="Add file: ")
+    txtFileMerge = tk.Entry(lblMergeRoot)
+    btnFileBrowse = tk.Button(lblMergeRoot, text="Browse",
+        command=lambda: mnuAddBrowse(txtFileMerge, " "))
+    lblMergeBtnRoot = tk.Label(dlgToolSort)
+    lblAddFrom = tk.Label(lblMergeBtnRoot, text="Add to where?:")
+    btnAddFromTop = tk.Button(lblMergeBtnRoot, text="Top",
+        command=lambda: mnuAddFromPos(txtFileMerge, "1.0"))
+    btnAddFromStart = tk.Button(lblMergeBtnRoot, text="Start",
+       command=lambda:mnuAddFromPos(txtFileMerge, "%s.0" % (spinStart.get())))
+    btnAddFromCursor = tk.Button(lblMergeBtnRoot, text="Cursor",
+        command=lambda: mnuAddFromPos(txtFileMerge))
+    btnAddFromStop = tk.Button(lblMergeBtnRoot, text="Stop",
+        command=lambda: mnuAddFromPos(txtFileMerge, "%s.0" % (spinStop.get())))
+    btnAddFromBottom = tk.Button(lblMergeBtnRoot, text="Bottom",
+        command=lambda: mnuAddFromPos(txtFileMerge, tk.END))
+
+    sortProgress = ttk.Progressbar(dlgToolSort, orient=tk.HORIZONTAL,
+        mode="determinate")
+
+    # Handle the layout all at once:
+    lblWarning.pack(padx=10, pady=5, side=tk.TOP, fill=tk.X)
+
+    lblSortRoot.pack(padx=10)
+    lblSortStartLine.grid(row=0, column=0, pady=5, sticky=tk.E)
+    lblSortEndLine.grid(row=1, column=0, pady=5, sticky=tk.E)
+    spinStart.grid(row=0, column=1, pady=5, sticky=tk.W)
+    spinStop.grid(row=1, column=1, pady=5, sticky=tk.W)
+    btnToolSortBeautify.grid(row=0, column=3, padx=10)
+    btnToolSort.grid(row=1, column=3, padx=10)
+
+    # Add weights before adding items to the layout
+    tk.Grid.columnconfigure(lblMergeRoot, 1, weight=1)
+    lblMergeRoot.pack(padx=10, fill=tk.X)
+    lblMergeFile.grid(column=0, row=0, padx=10, pady=5, sticky=tk.W+tk.E)
+    txtFileMerge.grid(column=1, row=0, sticky=tk.W+tk.E)
+    btnFileBrowse.grid(column=2, row=0, padx=10, sticky=tk.W+tk.E)
+
+    lblMergeBtnRoot.pack(padx=10, fill=tk.X)
+    lblAddFrom.grid(column=0, row=0, padx=5)
+    btnAddFromTop.grid(column=1, row=0, padx=5)
+    btnAddFromStart.grid(column=2, row=0, padx=5)
+    btnAddFromCursor.grid(column=3, row=0, padx=5)
+    btnAddFromStop.grid(column=4, row=0, padx=5)
+    btnAddFromBottom.grid(column=5, row=0, padx=5)
+
+    sortProgress.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X)
 
     #dlgToolSort.resizable(False, False)
     dlgToolSort.bind("<Escape>", dlgDismissEvent)
@@ -590,11 +631,14 @@ def mnuToolSort(e=None):
     dlgToolSort.wait_window()     # block until window is destroyed
 
 def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
+    sortProgress["value"] = 0
     match_length = tk.IntVar()
     cur_end = editor_text.index(tk.END)
     if (Decimal(cur_end) > Decimal(end_index)):
         cur_end = str(Decimal(end_index))
     cur_index = str(Decimal(start_index))
+    cur_pindex = Decimal(start_index)
+    cur_pend = Decimal(end_index)
     combined_regexp = r"[ \t][ \t]+|^[ \t]]+|[ \t]+$|^\#.*$|^\r?\n"
     while Decimal(cur_index) <= Decimal(cur_end):
         dlgToolSort.update_idletasks()
@@ -606,28 +650,34 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         except Exception as exp0:
             break
         if not cur_index or match_length.get() == 0: break
+        cur_pindex = Decimal(start_index)
         next_index = "%s+%sc" % (cur_index, match_length.get())
         found_text = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
         # One space is fine but not more than 1
         if found_text.startswith(" ") or found_text.startswith("\t"):
             editor_text.insert(cur_index, " ")
+        elif found_text == "\n":
+            cur_pend -= Decimal(1.0)
+            cur_end = str(cur_pend)
+        curProgress = int(Decimal(cur_pindex) / Decimal(cur_pend) * 100)
+        sortProgress["value"] = curProgress
     # Done with all searches
+    sortProgress["value"] = 100
     editor_text.see(tk.INSERT)
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
     if oldEnd >= newEnd:
         spinStartMax(e, newEnd)
+    btnToolSort.config(state=tk.NORMAL)
 
 def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
-    global stopNOW
     # Variable prep:
     startInt = math.floor(Decimal(start_index))
     stopInt = math.floor(Decimal(end_index)) - 1
     if stopInt - startInt > max_passes:
         max_passes = stopInt - startInt
-    stopNOW.set(False)
     if (startInt >= stopInt):
         return # Not enough lines to sort ( >= 3+ )
     # Time to do the actual sort:
@@ -646,7 +696,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                 nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
                 curList = curLine.splitlines()[0].split(" ", 3)
                 nextListTest = nextLine.splitlines()
-                if nextListTest and not stopNOW.get(): # Sometimes it is an empty list!
+                if nextListTest: # Sometimes it is an empty list!
                     nextList = nextLine.splitlines()[0].split(" ", 3)
                 else:
                     break
@@ -672,7 +722,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                     curLine = " ".join(curList) + "\n" # os.linesep
                     editor_text.delete(f"{innerLoop}.0", f"{nextPos+1}.0")
                     editor_text.insert(f"{innerLoop}.0", curLine)
-        if not lineSwap or stopNOW.get(): # If already sorted, skip further iterations.
+        if not lineSwap: # If already sorted, skip further iterations.
             break
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
@@ -686,16 +736,17 @@ def linekey(entry):
     return entry[1]
 def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     # Variable prep:
+    sortProgress["value"] = 0
     startInt = math.floor(Decimal(start_index))
     stopInt = math.floor(Decimal(end_index)) - 1
     if stopInt - startInt > max_passes:
         max_passes = stopInt - startInt
-    stopNOW.set(False)
     if (startInt >= stopInt):
         return # Not enough lines to sort ( >= 3+ )
     list2sort = [None] * (stopInt+1)
     # Read all of the lines into lists:
     for innerLoop in range(startInt, stopInt+1):
+        dlgToolSort.update_idletasks()
         nextPos = innerLoop + 1
         try:
             curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
@@ -709,11 +760,14 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
         except Exception:
             break
         list2sort[innerLoop] = curList
+        sortProgress["value"] = int((innerLoop / (stopInt+1)) * 45)
     # Time to do the actual (fast) sort:
     sortedLines = sorted(list2sort, key=linekey)
+    sortProgress["value"] = 55
     list2sort = None # Empty unsorted list
     # Now check for duplicates:
     for innerLoop in range(startInt, stopInt):
+        dlgToolSort.update_idletasks()
         nextPos = innerLoop + 1
         if innerLoop >= len(sortedLines) or nextPos >= len(sortedLines):
             break
@@ -733,6 +787,7 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                 allComments = " ".join([sortedLines[innerLoop][2], sortedLines[nextPos][2]])
                 sortedLines[innerLoop][2] = allComments
                 sortedLines.pop(nextPos)
+        sortProgress["value"] = int(55 + ((innerLoop / stopInt) * 45))
     sortedList = [None] * (stopInt+1)
     if len(sortedLines) < stopInt:
         stopInt = len(sortedLines)
@@ -743,13 +798,12 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     sortedLines = sortedList[startInt:stopInt+1]
     sortedList = [elem for elem in sortedLines if elem is not None]
     sortedLines = None
-    dlgToolSort.update_idletasks()
     editor_text.delete(start_index, end_index)
-    dlgToolSort.update_idletasks()
     if start_index == "1.0":
         editor_text.insert(start_index, "\n".join(sortedList))
     else:
         editor_text.insert(start_index, "\n" + "\n".join(sortedList))
+    sortProgress["value"] = 100
     dlgToolSort.update_idletasks()
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
@@ -783,6 +837,7 @@ def mnuToolWrapSet(curwrap):
     statusBarWrap["text"] = f"Wrap: {curwrap.capitalize()}"
 
 def fontChanged(curfont):
+    # Font info:  .metrics("fixed") == 1 - Fixed with fonts only
     editor_text.config(font=curfont)
 def mnuToolFont(e=None):
     # Tkinter has not yet added a convenient way to use this font dialog,
@@ -877,6 +932,46 @@ def mnuToolOptions(e=None):
 def mnuHelpAbout(e=None):
     tkmessagebox.showinfo("About", "This program is a text editor designed to help merge multiple HOSTS files together.")
 
+# By default, some menu items don't make sense to have enabled when the editor_text is empty
+def mnuDisableWhenEmpty():
+    global mnuFile, mnuEdit, mnuTool
+    mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
+    if fileMainFilename == "":
+#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
+    mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Cut", state="disabled")        # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Copy", state="disabled")       # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Find & Replace...", state="disabled")    # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Sort/Merge Hosts", state="disabled") # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
+
+def mnuDisableUnReDo():
+    if not editor_text.edit_modified():
+        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
+        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
+
+def mnuEnableUnReDo():
+    if editor_text.edit_modified():
+        mnuEdit.entryconfig("Undo", state="normal")       # Enabled upon editor_text change; enables Redo
+
+def mnuEnable():
+    global mnuFile, mnuEdit, mnuTool
+    mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
+    if fileMainFilename != "":
+#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
+    mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Cut", state="normal")        # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Copy", state="normal")       # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Find & Replace...", state="normal")    # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Sort/Merge Hosts", state="normal") # Enable when editor_text.get() != ""
+    mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
+
 def rightClickMenu(e=None):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
 
@@ -902,9 +997,6 @@ def editorUpdate(e=None):
         statusBar.config(text="Status Bar")
         mnuDisableUnReDo()
 
-
-# Font info:  .metrics("fixed") == 1 - Fixed with fonts only
-
 #
 # Main editor window
 #
@@ -921,7 +1013,7 @@ editor_text = tk.Text(editor_frame, width=20, height=20, wrap="none", undo=True,
 # Default to Dark Mode
 editor_text.config(fg="white", bg="black", insertbackground="white", insertwidth=2)
 
-editor_text.pack(expand=True, fill=tk.BOTH) # Must be last to AutoResize properly
+editor_text.pack(expand=True, fill=tk.BOTH) # Last for proper AutoResize
 
 # Configure scrollbars
 vert_scroll.config(command=editor_text.yview)
@@ -996,46 +1088,6 @@ mnuRightWrap.add_radiobutton(label="Word", value="word", variable=textWrap, comm
 mnuRightClick.add_separator()
 mnuRightClick.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
-# By default, some menu items don't make sense to have enabled when the editor_text is empty
-def mnuDisableWhenEmpty(firstRun=False):
-    global mnuFile, mnuEdit, mnuTool
-    mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
-    if fileMainFilename == "":
-#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
-        mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
-    mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Cut", state="disabled")        # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Copy", state="disabled")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find & Replace...", state="disabled")    # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort/Merge Hosts", state="disabled") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
-
-def mnuDisableUnReDo(fileOpened=None):
-    if not editor_text.edit_modified():
-        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
-        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
-
-def mnuEnableUnReDo(fileOpened=None):
-    if editor_text.edit_modified():
-        mnuEdit.entryconfig("Undo", state="normal")       # Enabled upon editor_text change; enables Redo
-
-def mnuEnable(fileOpened=None):
-    global mnuFile, mnuEdit, mnuTool
-    mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
-    if fileMainFilename != "":
-#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
-        mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
-    mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Cut", state="normal")        # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Copy", state="normal")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find & Replace...", state="normal")    # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort/Merge Hosts", state="normal") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
-
 # Any time the cursor moves in the text box, set cursor pos in the status bar:
 editor_text.bind("<Activate>", editorUpdate)
 editor_text.bind("<ButtonRelease>", editorUpdate)
@@ -1063,21 +1115,24 @@ root.bind("<Button-3>", rightClickMenu)
 
 # Status bar
 statusBarRoot = tk.Label(root, relief=tk.SUNKEN)
-tk.Grid.columnconfigure(statusBarRoot, 2, weight=1) # Make at least 1 status bar field expand
-#statusTheme = ttk.Combobox(statusBarRoot, values=THEMES)
-#statusTheme.grid(column=0, row=0, padx=1, sticky=tk.W+tk.E)
-statusBarCursor = tk.Label(statusBarRoot, text="Cursor: 0.0", padx=5, pady=3, bd=1, relief=tk.SUNKEN)
-statusBarCursor.grid(column=3, row=0, padx=1, sticky=tk.W+tk.E)
-statusBarFile = tk.Label(statusBarRoot, text="CurrentFilename", padx=5, pady=3, bd=1, relief=tk.SUNKEN)
-statusBarFile.grid(column=2, row=0, padx=1, sticky=tk.W+tk.E)
-# Maybe add another status indicator containing a progress bar for file Open/Save?
-statusBar = tk.Label(statusBarRoot, text="Status Bar", padx=5, pady=3, bd=1, relief=tk.SUNKEN)
-statusBar.grid(column=1, row=0, sticky=tk.W+tk.E)
-statusBarWrap = tk.Label(statusBarRoot, text="Wrap: None", padx=5, pady=3, bd=1, relief=tk.SUNKEN)
-statusBarWrap.grid(column=4, row=0, sticky=tk.W+tk.E)
+statusBar = tk.Label(statusBarRoot, text="Status Bar",
+    padx=5, pady=3,bd=1, relief=tk.SUNKEN)
+statusBarFile = tk.Label(statusBarRoot, text="CurrentFilename",
+    padx=5, pady=3, bd=1, relief=tk.SUNKEN)
+# Add another indicator for a progress bar when doing Open/Save?
+statusBarCursor = tk.Label(statusBarRoot, text="Cursor: 0.0",
+    padx=5, pady=3, bd=1, relief=tk.SUNKEN)
+statusBarWrap = tk.Label(statusBarRoot, text="Wrap: None",
+    padx=5, pady=3, bd=1, relief=tk.SUNKEN)
 statusBarGrip = ttk.Sizegrip(statusBarRoot)
+
+# Make at least 1 status bar field expand
+tk.Grid.columnconfigure(statusBarRoot, 2, weight=1)
+statusBar.grid(column=1, row=0, sticky=tk.W+tk.E)
+statusBarFile.grid(column=2, row=0, padx=1, sticky=tk.W+tk.E)
+statusBarCursor.grid(column=3, row=0, padx=1, sticky=tk.W+tk.E)
+statusBarWrap.grid(column=4, row=0, sticky=tk.W+tk.E)
 statusBarGrip.grid(column=5, row=0, sticky=tk.W+tk.E, padx=(10,0), pady=(10,0))
-#statusBarCursor.config(textvariable=editor_text.index(tk.INSERT)) # Testing stuff
 
 # Now we can add the status bar
 statusBarRoot.pack(side=tk.BOTTOM, fill=tk.X)
@@ -1088,11 +1143,8 @@ if __name__ == "__main__":
     searchStart = "1.0"
     center_window(root, 800, 600, False)
     detectHosts()
-    mnuDisableWhenEmpty(True)
+    mnuDisableWhenEmpty()
 
     editor_text.focus()
     #editor_text.insert(tk.END, font.families())
     root.mainloop()
-
-# Message boxes
-# showinfo, showwarning, showerror, askquestion, askokcancel, askyesno
