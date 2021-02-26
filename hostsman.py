@@ -49,8 +49,8 @@ def detectHosts():
         hosts_path = "/private/etc"
         hosts_file = hosts_path + "/hosts"
     elif curopsys == "Windows":
-        path_slash = "\\"
-        # The Windows registry is the authoritative source for the location of the HOSTS file.
+        path_slash = os.sep
+        # The Windows registry is authoritative for the HOSTS file location.
         try:
             import winreg
             hivekey = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
@@ -139,7 +139,8 @@ def mnuFileOpenSys(e=None):
             "Unable to find HOSTS file or detect Operating System\n\n" +
             "Do you want to browse for the HOSTS file?")
         if response == 1:
-            fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Open System HOSTS")
+            fileMainFilename = tkfiledialog.askopenfilename(
+                initialdir=init_dir, title="Open System HOSTS")
     else:
         fileMainFilename = hosts_file
     if fileMainFilename != "" and fileMainFilename != ():
@@ -161,8 +162,10 @@ def mnuFileOpenSys(e=None):
 def mnuFileOpen(e=None):
     global fileUnsavedChanges, fileMainFilename, init_dir
     try:
-        #fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Open a Hosts file")
-        fileMainFilename = tkfiledialog.askopenfilename(title="Open a Hosts file")
+        #fileMainFilename = tkfiledialog.askopenfilename(
+        #    initialdir=init_dir, title="Open a Hosts file")
+        fileMainFilename = tkfiledialog.askopenfilename(
+            title="Open a Hosts file")
         if fileMainFilename == "" or fileMainFilename == ():
             return
         text_file = open(fileMainFilename, "r")
@@ -186,7 +189,8 @@ def mnuFileMerge(e=None):
         if fileMainFilename == "" or fileMainFilename == ():
             return
         text_file = open(fileMainFilename, "r")
-        hosts_contents = text_file.read()   # text_file.readlines(), list(sorted())
+        # text_file.readlines(), list(sorted())
+        hosts_contents = text_file.read()
         editor_text.insert(tk.END, "\r\n")
         editor_text.insert(tk.END, hosts_contents)
         text_file.close()
@@ -287,7 +291,9 @@ def mnuFileExit(e=None):
     global fileUnsavedChanges
     quitMsg = "Are you sure you want to quit?"
     menuBarUsed = True
-    if e:   # Don't prompt to quit if key binding was used unless there are unsaved changes
+    # Don't prompt to quit if key binding was used
+    # unless there are unsaved changes
+    if e:
         menuBarUsed = False
     if fileUnsavedChanges:
         quitMsg = "You have UNSAVED changes, are you sure you want to quit?"
@@ -784,7 +790,8 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                 sortedLines.pop(nextPos)
             elif len(sortedLines[innerLoop])>2 and len(sortedLines[nextPos])>2:
                 # Consolidate the comments between the 2 lines
-                allComments = " ".join([sortedLines[innerLoop][2], sortedLines[nextPos][2]])
+                allComments = " ".join([sortedLines[innerLoop][2],
+                    sortedLines[nextPos][2]])
                 sortedLines[innerLoop][2] = allComments
                 sortedLines.pop(nextPos)
         sortProgress["value"] = (55 + ((innerLoop / stopInt) * 45))
@@ -841,13 +848,11 @@ def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
                 iid=innerLoop, text=innerLoop, values=tuple(curList))
         filterProgress["value"] = ((innerLoop / (stopInt+1)) * 100)
     filterProgress["value"] = 100
-
 def mnuToolFilter(e=None):
     global dlgToolFilter, filterProgress
     dlgToolFilter = tk.Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
     center_window(dlgToolFilter, 650, 450)
-    # TODO:
     cur_end = editor_text.index(tk.END)
     lastline = int(cur_end.split(".", 1)[0]) # "int" may be too small
     start_fline = tk.IntVar()
@@ -914,10 +919,6 @@ def mnuToolFilter(e=None):
     treeComments.tag_configure("host", font=editor_text["font"],
         foreground=editor_text["foreground"],
         background=editor_text["background"])
-
-    #treeComments.insert(
-    #   parent="", index="end", iid=lineNo, text=LineNo,
-    #   values=(IP, Hostname, Comments))
 
     lblFilterRoot.pack(padx=10, side=tk.TOP)
     lblFilterStartLine.grid(row=0, column=0, pady=5, sticky=tk.E)
@@ -1010,7 +1011,6 @@ def mnuToolColor(e=None):
 
     dlgToolColor.resizable(False, False)
     dlgToolColor.bind("<Escape>", dlgDismissEvent)
-    #dlgToolColor.attributes("-toolwindow", True)
     #dlgToolColor.overrideredirect(True)
     dlgToolColor.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolColor)) # intercept close button
@@ -1043,7 +1043,8 @@ def mnuToolOptions(e=None):
 def mnuHelpAbout(e=None):
     tkmessagebox.showinfo("About", "This program is a text editor designed to help merge multiple HOSTS files together.")
 
-# By default, some menu items don't make sense to have enabled when the editor_text is empty
+# By default, some menu items don't make sense to have enabled
+# when editor_text is empty
 def mnuDisableWhenEmpty():
     global mnuFile, mnuEdit, mnuTool
     # Enable when editor_text.get() != ""
@@ -1207,7 +1208,7 @@ mnuToolWrap.add_radiobutton(label="Word", value="word", variable=textWrap,
     command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuTool.add_command(label="Text Font", command=mnuToolFont)
 mnuTool.add_command(label="Editor Colors", command=mnuToolColor)
-mnuTool.add_command(label="Options...", command=mnuToolOptions) # blockcursor= ?
+mnuTool.add_command(label="Options...", command=mnuToolOptions)
 
 mnuHelp = tk.Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="Help", menu=mnuHelp)
@@ -1230,7 +1231,8 @@ mnuRightClick.add_command(label="Find & Replace...",
     command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
 # Radio between [none, char, word]
 mnuRightClick.add_cascade(label="Text Wrap", menu=mnuRightWrap)
-# Might be a bug that we can't use mnuToolWrap above instead of having to rebuild it below
+# Might be a bug that we can't use mnuToolWrap above instead of
+# having to rebuild it below
 mnuRightWrap.add_radiobutton(label="None", value="none", variable=textWrap,
     command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuRightWrap.add_radiobutton(label="Char", value="char", variable=textWrap,
