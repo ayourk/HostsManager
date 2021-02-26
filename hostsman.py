@@ -26,9 +26,9 @@ import threading
 # TODO:
 #    Finish special dialogs related to the purpose of this app (in progress)
 #       Make the Minimize button disappear or nonfunctional
-#    Perform the backend logic on editor_text with said dialogs
 #    Finish backend functionality for many of the dialogs
 #       Flesh out Sort, Filter, Options dialogs (in progress)
+#       Allow tagging of lines from imported/merged files to indicate source
 #    Add Line numbering feature (as an option) from:
 # https://stackoverflow.com/questions/16369470/tkinter-adding-line-number-to-text-widget
 
@@ -535,9 +535,7 @@ def mnuToolSort(e=None):
     dlgToolSort = tk.Toplevel(root)
     dlgToolSort.title("Sort/Merge Hosts")
     center_window(dlgToolSort, 650, 210)
-    # TODO:
     # Figure out how many lines the currently loaded file is
-    cur_cursor = editor_text.index(tk.INSERT)
     cur_end = editor_text.index(tk.END)
     lastline = int(cur_end.split(".", 1)[0]) # "int" may be too small
     start_line = tk.IntVar()
@@ -662,8 +660,7 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         elif found_text == "\n":
             cur_pend -= Decimal(1.0)
             cur_end = str(cur_pend)
-        curProgress = int(Decimal(cur_pindex) / Decimal(cur_pend) * 100)
-        sortProgress["value"] = curProgress
+        sortProgress["value"] = (Decimal(cur_pindex) / Decimal(cur_pend) * 100)
     # Done with all searches
     sortProgress["value"] = 100
     editor_text.see(tk.INSERT)
@@ -686,7 +683,8 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     #for outerLoop in range(startInt, stopInt):
     for outerLoop in range(startInt, startInt+max_passes):
         lineSwap = False # Prepare to short circuit sorting
-        statusBar.config(text=f"Pass {outerLoop-startInt+1} of {stopInt-startInt+1}")
+        statusBar.config(
+            text=f"Pass {outerLoop-startInt+1} of {stopInt-startInt+1}")
         statusBar.update_idletasks()
         for innerLoop in range(startInt, stopInt):
             nextPos = innerLoop + 1
@@ -756,13 +754,13 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
             if not curLine.endswith("\n"): curLine += "\n"
             curListTest = curLine.splitlines()
             if curListTest: # Sometimes it is an empty list!
-                curList = curListTest[0].split(" ", 3)
+                curList = curListTest[0].split(" ", 2)
             else: # Design feature: Blank lines will cause sorting to stop
                 break
         except Exception:
             break
         list2sort[innerLoop] = curList
-        sortProgress["value"] = int((innerLoop / (stopInt+1)) * 45)
+        sortProgress["value"] = ((innerLoop / (stopInt+1)) * 45)
     # Time to do the actual (fast) sort:
     sortedLines = sorted(list2sort, key=linekey)
     sortProgress["value"] = 55
@@ -789,7 +787,7 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                 allComments = " ".join([sortedLines[innerLoop][2], sortedLines[nextPos][2]])
                 sortedLines[innerLoop][2] = allComments
                 sortedLines.pop(nextPos)
-        sortProgress["value"] = int(55 + ((innerLoop / stopInt) * 45))
+        sortProgress["value"] = (55 + ((innerLoop / stopInt) * 45))
     sortedList = [None] * (stopInt+1)
     if len(sortedLines) < stopInt:
         stopInt = len(sortedLines)
@@ -813,25 +811,137 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     if oldEnd >= newEnd:
         spinStartMax(e, newEnd)
 
+def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
+    # Variable prep:
+    filterProgress["value"] = 0
+    startInt = math.floor(Decimal(start_index))
+    stopInt = math.floor(Decimal(end_index))
+    if (startInt >= stopInt):
+        return # Not enough lines to filter ( >= 3+ )
+    # Make sure our Treeview is empty:
+    for record in e.get_children():
+        e.delete(record)
+    # Read all of the lines into the Treeview:
+    for innerLoop in range(startInt, stopInt+1):
+        dlgToolFilter.update_idletasks()
+        nextPos = innerLoop + 1
+        try:
+            curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
+            # Sometimes the last line doesn't have a newline:
+            if not curLine.endswith("\n"): curLine += "\n"
+            curListTest = curLine.splitlines()
+            if curListTest: # Sometimes it is an empty list!
+                curList = curListTest[0].split(" ", 2)
+            else: # Design feature: Blank lines should cause filtering to stop
+                break
+        except Exception:
+            break
+        if len(curList) > 2 and curList[2].startswith("#"):
+            e.insert(parent="", index="end",
+                iid=innerLoop, text=innerLoop, values=tuple(curList))
+        filterProgress["value"] = ((innerLoop / (stopInt+1)) * 100)
+    filterProgress["value"] = 100
+
 def mnuToolFilter(e=None):
-    global dlgToolFilter
+    global dlgToolFilter, filterProgress
     dlgToolFilter = tk.Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
-    center_window(dlgToolFilter, 300, 250)
+    center_window(dlgToolFilter, 650, 450)
     # TODO:
+    cur_end = editor_text.index(tk.END)
+    lastline = int(cur_end.split(".", 1)[0]) # "int" may be too small
+    start_fline = tk.IntVar()
+    stop_fline = tk.IntVar()
+    start_fline.set(1)
+    stop_fline.set(lastline)
+    spinFStart = None
+    spinFStop = None
+    lblFilterRoot = tk.Label(dlgToolFilter)
+    lblFilterStartLine = tk.Label(lblFilterRoot, text="Start filter at Line: ")
+    lblFilterEndLine = tk.Label(lblFilterRoot, text="Stop filter at Line: ")
+    # Now to create the dependent spinboxes
+    try:
+        spinFStart = tk.Spinbox(lblFilterRoot, increment=1,
+            from_=1, to=int(stop_fline.get()),
+            textvariable=start_fline,
+            command=lambda:spinStopMin(spinFStop, start_fline.get()))
+        spinFStop = tk.Spinbox(lblFilterRoot, increment=1,
+            from_=int(start_fline.get()), to=int(lastline),
+            textvariable=stop_fline,
+            command=lambda:spinStartMax(spinFStart, stop_fline.get()))
+    except Exception as exp:
+        pass
+    btnToolFilter = tk.Button(lblFilterRoot,
+        text="Show Hosts with Comments",
+        command=lambda: threading.Thread(mnuToolFilterComments(
+            treeComments, "%s.0" % (spinFStart.get()), "%s.0" % (spinFStop.get())
+        )).start())
+    frameComments = tk.Frame(dlgToolFilter)
+    treeVScroll = tk.Scrollbar(frameComments, takefocus=0)
+    treeHScroll = tk.Scrollbar(frameComments, takefocus=0, orient="horizontal")
+    treeComments = ttk.Treeview(frameComments, selectmode="browse",
+        xscrollcommand=treeHScroll.set, yscrollcommand=treeVScroll.set)
+    treeVScroll.config(command=treeComments.yview)
+    treeHScroll.config(command=treeComments.xview)
+    filterProgress = ttk.Progressbar(dlgToolFilter, orient=tk.HORIZONTAL,
+        mode="determinate")
 
-    #txtFindR.focus()
+    treeStyle = ttk.Style()
+    treeStyle.theme_use("default")
+    treeStyle.configure("Treeview",
+        foreground=editor_text["foreground"],
+        background=editor_text["background"],
+        fieldbackground=editor_text["background"]
+    )
+    treeStyle.map("Treeview",
+        foreground=[("selected", editor_text["selectforeground"])],
+        background=[("selected", editor_text["selectbackground"])]
+    )
+
+    treeComments["columns"] = ("IP", "Hostname", "Comments")
+    # First column is the Phantom/"icon" column
+    treeComments.column("#0", anchor=tk.E, width=70,
+        minwidth=25, stretch=tk.NO)
+    treeComments.column("IP", anchor=tk.CENTER, width=80, stretch=tk.NO)
+    treeComments.column("Hostname", anchor=tk.W, width=200, stretch=tk.NO)
+    treeComments.column("Comments", anchor=tk.W)
+
+    treeComments.heading("#0", text="Line", anchor=tk.CENTER)
+    treeComments.heading("IP", text="IP", anchor=tk.CENTER)
+    treeComments.heading("Hostname", text="Hostname", anchor=tk.CENTER)
+    treeComments.heading("Comments", text=" Comments", anchor=tk.W)
+
+    treeComments.tag_configure("host", font=editor_text["font"],
+        foreground=editor_text["foreground"],
+        background=editor_text["background"])
+
+    #treeComments.insert(
+    #   parent="", index="end", iid=lineNo, text=LineNo,
+    #   values=(IP, Hostname, Comments))
+
+    lblFilterRoot.pack(padx=10, side=tk.TOP)
+    lblFilterStartLine.grid(row=0, column=0, pady=5, sticky=tk.E)
+    lblFilterEndLine.grid(row=1, column=0, pady=5, sticky=tk.E)
+    spinFStart.grid(row=0, column=1, pady=5, sticky=tk.W)
+    spinFStop.grid(row=1, column=1, pady=5, sticky=tk.W)
+    btnToolFilter.grid(row=0, column=3, rowspan=2, padx=10)
+
+    filterProgress.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X)
+    frameComments.pack(padx=10, pady=(10,0), expand=True, fill=tk.BOTH)
+    # Always add scroll bars before the scrolled widget
+    treeVScroll.pack(side=tk.RIGHT, fill=tk.Y)
+    treeHScroll.pack(side=tk.BOTTOM, fill=tk.X)
+    treeComments.pack(expand=True, fill=tk.BOTH)
+
     #dlgToolFilter.resizable(False, False)
-    #dlgToolFilter.bind("<Return>", mnuEditReplaceFind)
     dlgToolFilter.bind("<Escape>", dlgDismissEvent)
-    #dlgToolFilter.attributes("-toolwindow", True)
     #dlgToolFilter.overrideredirect(True)
     dlgToolFilter.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolFilter)) # intercept close button
     dlgToolFilter.transient(root)   # dialog window is related to main
     # Still need to remove min/max buttons and keep the X button
     dlgToolFilter.wait_visibility() # can't grab until window appears, so we wait
-    dlgToolFilter.grab_set()        # ensure all input goes to our window
+    #dlgToolFilter.grab_set()        # ensure all input goes to our window
     dlgToolFilter.wait_window()     # block until window is destroyed
 
 def mnuToolWrapSet(curwrap):
@@ -921,7 +1031,6 @@ def mnuToolOptions(e=None):
     #dlgToolOptions.resizable(False, False)
     #dlgToolOptions.bind("<Return>", mnuEditReplaceFind)
     dlgToolOptions.bind("<Escape>", dlgDismissEvent)
-    #dlgToolOptions.attributes("-toolwindow", True)
     #dlgToolOptions.overrideredirect(True)
     dlgToolOptions.protocol("WM_DELETE_WINDOW",
         lambda: dlgDismiss(dlgToolOptions)) # intercept close button
@@ -937,42 +1046,53 @@ def mnuHelpAbout(e=None):
 # By default, some menu items don't make sense to have enabled when the editor_text is empty
 def mnuDisableWhenEmpty():
     global mnuFile, mnuEdit, mnuTool
-    mnuFile.entryconfig("New", state="disabled")        # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save", state="disabled")       # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save As...", state="disabled") # Enable when editor_text.get() != ""
+    # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("New", state="disabled")
+    mnuFile.entryconfig("Save", state="disabled")
+    mnuFile.entryconfig("Save As...", state="disabled")
     if fileMainFilename == "":
-#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
-        mnuFile.entryconfig("Revert", state="disabled")     # Enable when fileMainFilename != ""
-    mnuEdit.entryconfig("Select All", state="disabled") # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Cut", state="disabled")        # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Copy", state="disabled")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find & Replace...", state="disabled")    # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort/Merge Hosts", state="disabled") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Filter Hosts", state="disabled") # Enable when editor_text.get() != ""
+        # Enable when fileMainFilename != ""
+        #mnuFile.entryconfig("Merge", state="disabled")
+        # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="disabled")
+    # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Select All", state="disabled")
+    mnuEdit.entryconfig("Cut", state="disabled")
+    mnuEdit.entryconfig("Copy", state="disabled")
+    mnuEdit.entryconfig("Find & Replace...", state="disabled")
+    mnuTool.entryconfig("Sort/Merge Hosts", state="disabled")
+    mnuTool.entryconfig("Filter Hosts", state="disabled")
 
 def mnuDisableUnReDo():
     if not editor_text.edit_modified():
-        mnuEdit.entryconfig("Undo", state="disabled")       # Enabled upon editor_text change; enables Redo
-        mnuEdit.entryconfig("Redo", state="disabled")       # Enabled upon Undo; disabled after use
+        # Enabled upon editor_text change; enables Redo
+        mnuEdit.entryconfig("Undo", state="disabled")
+        # Enabled upon Undo; disabled after use
+        mnuEdit.entryconfig("Redo", state="disabled")
 
 def mnuEnableUnReDo():
     if editor_text.edit_modified():
-        mnuEdit.entryconfig("Undo", state="normal")       # Enabled upon editor_text change; enables Redo
+        # Enabled upon editor_text change; enables Redo
+        mnuEdit.entryconfig("Undo", state="normal")
 
 def mnuEnable():
     global mnuFile, mnuEdit, mnuTool
-    mnuFile.entryconfig("New", state="normal")        # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save", state="normal")       # Enable when editor_text.get() != ""
-    mnuFile.entryconfig("Save As...", state="normal") # Enable when editor_text.get() != ""
+    # Enable when editor_text.get() != ""
+    mnuFile.entryconfig("New", state="normal")
+    mnuFile.entryconfig("Save", state="normal")
+    mnuFile.entryconfig("Save As...", state="normal")
     if fileMainFilename != "":
-#        mnuFile.entryconfig("Merge", state="disabled")      # Enable when fileMainFilename != ""
-        mnuFile.entryconfig("Revert", state="normal")     # Enable when fileMainFilename != ""
-    mnuEdit.entryconfig("Select All", state="normal") # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Cut", state="normal")        # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Copy", state="normal")       # Enable when editor_text.get() != ""
-    mnuEdit.entryconfig("Find & Replace...", state="normal")    # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Sort/Merge Hosts", state="normal") # Enable when editor_text.get() != ""
-    mnuTool.entryconfig("Filter Hosts", state="normal") # Enable when editor_text.get() != ""
+        # Enable when fileMainFilename != ""
+        #mnuFile.entryconfig("Merge", state="disabled")
+        # Enable when fileMainFilename != ""
+        mnuFile.entryconfig("Revert", state="normal")
+    # Enable when editor_text.get() != ""
+    mnuEdit.entryconfig("Select All", state="normal")
+    mnuEdit.entryconfig("Cut", state="normal")
+    mnuEdit.entryconfig("Copy", state="normal")
+    mnuEdit.entryconfig("Find & Replace...", state="normal")
+    mnuTool.entryconfig("Sort/Merge Hosts", state="normal")
+    mnuTool.entryconfig("Filter Hosts", state="normal")
 
 def rightClickMenu(e=None):
     mnuRightClick.tk_popup(e.x_root, e.y_root)
@@ -1009,11 +1129,12 @@ vert_scroll = tk.Scrollbar(editor_frame, takefocus=0)
 vert_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 horiz_scroll = tk.Scrollbar(editor_frame, takefocus=0, orient="horizontal")
 horiz_scroll.pack(side=tk.BOTTOM, fill=tk.X)
-editor_text = tk.Text(editor_frame, width=20, height=20, wrap="none", undo=True,
+editor_text = tk.Text(editor_frame, width=20, height=20,
+    wrap="none", undo=True,
     selectbackground="yellow", # Default is Gray
     xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
 # Default to Dark Mode
-editor_text.config(fg="white", bg="black", insertbackground="white", insertwidth=2)
+editor_text.config(fg="white", bg="black", insertbackground="white")
 
 editor_text.pack(expand=True, fill=tk.BOTH) # Last for proper AutoResize
 
@@ -1026,30 +1147,44 @@ rootMenu = tk.Menu(root)
 root.config(menu=rootMenu)
 
 mnuFile = tk.Menu(rootMenu, tearoff=False)
-rootMenu.add_cascade(label="File", menu=mnuFile, accelerator="(Ctrl+N)")
-mnuFile.add_command(label="New", command=lambda: mnuFileNew(0), accelerator="(Ctrl+N)")
-mnuFile.add_command(label="Open System Hosts", command=mnuFileOpenSys, accelerator="(Ctrl+Shift+O)")
-mnuFile.add_command(label="Open...", command=lambda: mnuFileOpen(0), accelerator="(Ctrl+O)")
+rootMenu.add_cascade(label="File", menu=mnuFile)
+mnuFile.add_command(label="New",
+    command=lambda: mnuFileNew(0), accelerator="(Ctrl+N)")
+mnuFile.add_command(label="Open System Hosts",
+    command=mnuFileOpenSys, accelerator="(Ctrl+Shift+O)")
+mnuFile.add_command(label="Open...",
+    command=lambda: mnuFileOpen(0), accelerator="(Ctrl+O)")
 #mnuFile.add_command(label="Merge", command=mnuFileMerge)
-mnuFile.add_command(label="Save", command=lambda: mnuFileSave(0), accelerator="(Ctrl+S)")
-mnuFile.add_command(label="Save As...", command=mnuFileSaveAs, accelerator="(Ctrl+Shift+S)")
-mnuFile.add_command(label="Revert", command=mnuFileRevert)
+mnuFile.add_command(label="Save",
+    command=lambda: mnuFileSave(0), accelerator="(Ctrl+S)")
+mnuFile.add_command(label="Save As...",
+    command=mnuFileSaveAs, accelerator="(Ctrl+Shift+S)")
+mnuFile.add_command(label="Revert",
+    command=mnuFileRevert)
 mnuFile.add_separator()
-mnuFile.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
+mnuFile.add_command(label="Exit",
+    command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 mnuEdit = tk.Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="Edit", menu=mnuEdit)
-mnuEdit.add_command(label="Undo", command=editor_text.edit_undo, accelerator="(Ctrl+Z)")
-mnuEdit.add_command(label="Redo", command=editor_text.edit_redo, accelerator="(Ctrl+Y)")
+mnuEdit.add_command(label="Undo",
+    command=editor_text.edit_undo, accelerator="(Ctrl+Z)")
+mnuEdit.add_command(label="Redo",
+    command=editor_text.edit_redo, accelerator="(Ctrl+Y)")
 mnuEdit.add_separator()
-mnuEdit.add_command(label="Select All", command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
-mnuEdit.add_command(label="Insert File...", command=lambda: mnuInsertFile(0), accelerator="(Ctrl+I)")
-mnuEdit.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
-mnuEdit.add_command(label="Copy", command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
-mnuEdit.add_command(label="Paste", command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
+mnuEdit.add_command(label="Select All",
+    command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
+mnuEdit.add_command(label="Insert File...",
+    command=lambda: mnuInsertFile(0), accelerator="(Ctrl+I)")
+mnuEdit.add_command(label="Cut",
+    command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
+mnuEdit.add_command(label="Copy",
+    command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
+mnuEdit.add_command(label="Paste",
+    command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
 mnuEdit.add_separator()
-mnuEdit.add_command(label="Find & Replace...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
-#mnuEdit.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+H)")
+mnuEdit.add_command(label="Find & Replace...",
+    command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
 
 textWrap = tk.StringVar()
 textWrap.set(editor_text["wrap"])
@@ -1057,16 +1192,22 @@ textWrap.set(editor_text["wrap"])
 mnuTool = tk.Menu(rootMenu, tearoff=False)
 mnuToolWrap = tk.Menu(mnuTool, tearoff=False)
 rootMenu.add_cascade(label="Tools", menu=mnuTool)
-mnuTool.add_command(label="Sort/Merge Hosts", command=mnuToolSort, accelerator="(Ctrl+Shift+M)")
-mnuTool.add_command(label="Filter Hosts", command=mnuToolFilter)
-mnuTool.add_cascade(label="Text Wrap", menu=mnuToolWrap) # Radio between [none, char, word]
+mnuTool.add_command(label="Sort/Merge Hosts",
+    command=mnuToolSort, accelerator="(Ctrl+Shift+M)")
+mnuTool.add_command(label="Filter Hosts",
+    command=mnuToolFilter, accelerator="(Ctrl+Shift+F)")
+# Radio between [none, char, word]
+mnuTool.add_cascade(label="Text Wrap", menu=mnuToolWrap)
 # See https://blog.tecladocode.com/how-to-add-menu-to-tkinter-app/
-mnuToolWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
-mnuToolWrap.add_radiobutton(label="Char", value="char", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
-mnuToolWrap.add_radiobutton(label="Word", value="word", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
-mnuTool.add_command(label="Text Font", command=mnuToolFont) # blockcursor= ?
+mnuToolWrap.add_radiobutton(label="None", value="none", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuToolWrap.add_radiobutton(label="Char", value="char", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuToolWrap.add_radiobutton(label="Word", value="word", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuTool.add_command(label="Text Font", command=mnuToolFont)
 mnuTool.add_command(label="Editor Colors", command=mnuToolColor)
-mnuTool.add_command(label="Options...", command=mnuToolOptions)
+mnuTool.add_command(label="Options...", command=mnuToolOptions) # blockcursor= ?
 
 mnuHelp = tk.Menu(rootMenu, tearoff=False)
 rootMenu.add_cascade(label="Help", menu=mnuHelp)
@@ -1074,21 +1215,31 @@ mnuHelp.add_command(label="About...", command=mnuHelpAbout)
 
 mnuRightClick = tk.Menu(root, tearoff=False)
 mnuRightWrap = tk.Menu(mnuRightClick, tearoff=False)
-mnuRightClick.add_command(label="Select All", command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
-mnuRightClick.add_command(label="Insert File...", command=lambda: mnuInsertFile(0), accelerator="(Ctrl+Shift+I)")
-mnuRightClick.add_command(label="Cut", command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
-mnuRightClick.add_command(label="Copy", command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
-mnuRightClick.add_command(label="Paste", command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
+mnuRightClick.add_command(label="Select All",
+    command=lambda: mnuSelectAll(0), accelerator="(Ctrl+A)")
+mnuRightClick.add_command(label="Insert File...",
+    command=lambda: mnuInsertFile(0), accelerator="(Ctrl+Shift+I)")
+mnuRightClick.add_command(label="Cut",
+    command=lambda: mnuEditCut(0), accelerator="(Ctrl+X)")
+mnuRightClick.add_command(label="Copy",
+    command=lambda: mnuEditCopy(0), accelerator="(Ctrl+C)")
+mnuRightClick.add_command(label="Paste",
+    command=lambda: mnuEditPaste(0), accelerator="(Ctrl+V)")
 mnuRightClick.add_separator()
-mnuRightClick.add_command(label="Find & Replace...", command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
-#mnuRightClick.add_command(label="Replace...", command=lambda: mnuEditReplace(0), accelerator="(Ctrl+R)")
-mnuRightClick.add_cascade(label="Text Wrap", menu=mnuRightWrap) # Radio between [none, char, word]
+mnuRightClick.add_command(label="Find & Replace...",
+    command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
+# Radio between [none, char, word]
+mnuRightClick.add_cascade(label="Text Wrap", menu=mnuRightWrap)
 # Might be a bug that we can't use mnuToolWrap above instead of having to rebuild it below
-mnuRightWrap.add_radiobutton(label="None", value="none", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
-mnuRightWrap.add_radiobutton(label="Char", value="char", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
-mnuRightWrap.add_radiobutton(label="Word", value="word", variable=textWrap, command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuRightWrap.add_radiobutton(label="None", value="none", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuRightWrap.add_radiobutton(label="Char", value="char", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
+mnuRightWrap.add_radiobutton(label="Word", value="word", variable=textWrap,
+    command=lambda: mnuToolWrapSet(textWrap.get()))
 mnuRightClick.add_separator()
-mnuRightClick.add_command(label="Exit", command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
+mnuRightClick.add_command(label="Exit",
+    command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 # Any time the cursor moves in the text box, set cursor pos in the status bar:
 editor_text.bind("<Activate>", editorUpdate)
@@ -1111,8 +1262,8 @@ root.bind("<Control-Key-x>", mnuEditCut)
 root.bind("<Control-Key-c>", mnuEditCopy)
 root.bind("<Control-Key-v>", mnuEditPaste)
 root.bind("<Control-Key-f>", mnuEditFind)
-#root.bind("<Control-Key-h>", mnuEditReplace)
 root.bind("<Control-Key-M>", mnuToolSort)
+root.bind("<Control-Key-F>", mnuToolFilter)
 root.bind("<Button-3>", rightClickMenu)
 
 # Status bar
