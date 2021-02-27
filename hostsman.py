@@ -24,11 +24,14 @@ import threading
 #
 
 # TODO:
-#    Finish special dialogs related to the purpose of this app (in progress)
+#    Finish special dialogs related to the purpose of this app (Mostly done)
 #       Make the Minimize button disappear or nonfunctional
 #    Finish backend functionality for many of the dialogs
-#       Flesh out Sort, Filter, Options dialogs (in progress)
-#       Allow tagging of lines from imported/merged files to indicate source
+#       Flesh out Sort, Filter, Options dialogs (almost done)
+#       Add a Replace All function
+#       Add file encoding option to the Options dialog
+#       Re-Find info about tkinter config files that I saw once.
+#           This will allow me to finish options dialog
 #    Add Line numbering feature (as an option) from:
 # https://stackoverflow.com/questions/16369470/tkinter-adding-line-number-to-text-widget
 
@@ -145,8 +148,12 @@ def mnuFileOpenSys(e=None):
         fileMainFilename = hosts_file
     if fileMainFilename != "" and fileMainFilename != ():
         try:
-            text_file = open(fileMainFilename, "r")
-            hosts_contents = text_file.read()
+            try: # Not all files are UTF-8; This needs a better solution.
+                text_file = open(fileMainFilename, "r")
+                hosts_contents = text_file.read()
+            except UnicodeDecodeError:
+                text_file = open(fileMainFilename, "r", encoding='ISO-8859-1')
+                hosts_contents = text_file.read()
             editor_text.delete(1.0, tk.END)
             editor_text.insert(tk.END, hosts_contents)
             text_file.close()
@@ -168,8 +175,12 @@ def mnuFileOpen(e=None):
             title="Open a Hosts file")
         if fileMainFilename == "" or fileMainFilename == ():
             return
-        text_file = open(fileMainFilename, "r")
-        hosts_contents = text_file.read()
+        try: # Not all files are UTF-8; This needs a better solution.
+            text_file = open(fileMainFilename, "r")
+            hosts_contents = text_file.read()
+        except UnicodeDecodeError:
+            text_file = open(fileMainFilename, "r", encoding='ISO-8859-1')
+            hosts_contents = text_file.read()
         editor_text.delete(1.0, tk.END)
         editor_text.insert(tk.END, hosts_contents)
         text_file.close()
@@ -188,9 +199,13 @@ def mnuFileMerge(e=None):
         fileMainFilename = tkfiledialog.askopenfilename(initialdir=init_dir, title="Merge Hosts file")
         if fileMainFilename == "" or fileMainFilename == ():
             return
-        text_file = open(fileMainFilename, "r")
         # text_file.readlines(), list(sorted())
-        hosts_contents = text_file.read()
+        try: # Not all files are UTF-8; This needs a better solution.
+            text_file = open(fileMainFilename, "r")
+            hosts_contents = text_file.read()
+        except UnicodeDecodeError:
+            text_file = open(fileMainFilename, "r", encoding='ISO-8859-1')
+            hosts_contents = text_file.read()
         editor_text.insert(tk.END, "\r\n")
         editor_text.insert(tk.END, hosts_contents)
         text_file.close()
@@ -212,8 +227,12 @@ def mnuInsertFile(e=None, mergefile="", targetpos="", title="Insert a file"):
             return fileMainFilename
         if fileMainFilename == "" or fileMainFilename == ():
             return ""
-        text_file = open(fileMainFilename, "r")
-        hosts_contents = text_file.read()
+        try: # Not all files are UTF-8; This needs a better solution.
+            text_file = open(fileMainFilename, "r")
+            hosts_contents = text_file.read()
+        except UnicodeDecodeError:
+            text_file = open(fileMainFilename, "r", encoding='ISO-8859-1')
+            hosts_contents = text_file.read()
         if targetpos == "":
             curpos = editor_text.index(tk.INSERT)
         else:
@@ -358,7 +377,7 @@ def mnuEditFind(e=None): # Used to be mnuEditReplace
     center_window(dlgEditReplace, 310, 160)
     lblFind = tk.Label(dlgEditReplace, text="Find:")
     lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
-    txtFind = tk.Entry(dlgEditReplace, textvariable=cursel_text)
+    txtFind = tk.Entry(dlgEditReplace) #, textvariable=cursel_text
     txtFind.grid(column=1, row=0, columnspan=2, pady=10)
     lblReplace = tk.Label(dlgEditReplace, text="Replace:")
     lblReplace.grid(column=0, row=1, padx=10, pady=5)
@@ -432,6 +451,7 @@ def mnuEditReplaceNext(e=None):
     global dlgEditReplace, txtFind, txtReplace, searchStart
     cursel_text = tk.StringVar()
     cursel_text.set("")
+    selected_index = "1.0"
     try:
         # For some reason, no text is selected by the time we come here.
         selected_index = editor_text.index(tk.SEL_FIRST)
@@ -531,13 +551,43 @@ def mnuAddFromPos(e=None, insertPos=""):
         return;
     if insertPos == "": # Default to cursor position
         insertPos = editor_text.index(tk.INSERT)
-    mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
+    if txtMergeTag.get().startswith("#"):
+        mergeTag = txtMergeTag.get()
+        try:
+            try: # Not all files are UTF-8; This needs a better solution.
+                text_file = open(curFile, "r")
+                merge_contents = text_file.readlines()
+            except UnicodeDecodeError:
+                text_file = open(curFile, "r", encoding='ISO-8859-1')
+                merge_contents = text_file.readlines()
+            for idx, curLine in enumerate(merge_contents):
+                if not curLine.endswith("\n"): curLine += "\n"
+                curListTest = curLine.splitlines()
+                if curListTest: # Sometimes it is an empty list!
+                    curList = curListTest[0].split(" ", 2)
+                    if len(mergeTag) > 1 and \
+                        (curList[0] == "0.0.0.0" or curList[0] == "127.0.0.1"):
+                        curList[0] = "0.0.0.0"
+                        if len(curList) == 2:
+                            curList.append(mergeTag)
+                        elif len(curList) > 2 and mergeTag not in curList[2]:
+                            curList[2] = " ".join([mergeTag, curList[2]])
+                    curLine = " ".join(curList)
+                    merge_contents[idx] = curLine
+            editor_text.insert(insertPos, "\n".join(merge_contents))
+            editor_text.mark_set(tk.INSERT, insertPos)
+        except Exception as exp:
+            tkmessagebox.showerror("ERROR", exp)
+            return
+    else:
+        mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
 def spinStartMax(e=None, maxline=-1):
     e.config(to=maxline)
 def spinStopMin(e=None, minline=1):
     e.config(from_=minline)
 def mnuToolSort(e=None):
-    global dlgToolSort, spinStart, spinStop, sortProgress, btnToolSort, txtFileMerge
+    global dlgToolSort, spinStart, spinStop, sortProgress, btnToolSort
+    global txtFileMerge, txtMergeTag
     dlgToolSort = tk.Toplevel(root)
     dlgToolSort.title("Sort/Merge Hosts")
     center_window(dlgToolSort, 650, 210)
@@ -576,6 +626,9 @@ def mnuToolSort(e=None):
         command=lambda: threading.Thread(mypySort(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())
         )).start())
+    lblMergeTag = tk.Label(lblSortRoot, text="Merge tag:")
+    txtMergeTag = tk.Entry(lblSortRoot)
+
     lblMergeRoot = tk.Label(dlgToolSort)
     lblMergeFile = tk.Label(lblMergeRoot, text="Add file: ")
     txtFileMerge = tk.Entry(lblMergeRoot)
@@ -607,6 +660,8 @@ def mnuToolSort(e=None):
     spinStop.grid(row=1, column=1, pady=5, sticky=tk.W)
     btnToolSortBeautify.grid(row=0, column=3, padx=10)
     btnToolSort.grid(row=1, column=3, padx=10)
+    lblMergeTag.grid(row=0, column=4, sticky=tk.W)
+    txtMergeTag.grid(row=1, column=4, sticky=tk.W+tk.E)
 
     # Add weights before adding items to the layout
     tk.Grid.columnconfigure(lblMergeRoot, 1, weight=1)
@@ -661,11 +716,14 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         found_text = editor_text.get(cur_index, next_index)
         editor_text.delete(cur_index, next_index)
         # One space is fine but not more than 1
-        if found_text.startswith(" ") or found_text.startswith("\t"):
+        if found_text == " " or found_text == "\t":
+            pass # This isn't a duplicate so it must be leading or trailing
+        elif found_text.startswith(" ") or found_text.startswith("\t"):
             editor_text.insert(cur_index, " ")
         elif found_text == "\n":
             cur_pend -= Decimal(1.0)
             cur_end = str(cur_pend)
+        editor_text.see(cur_index)
         sortProgress["value"] = (Decimal(cur_pindex) / Decimal(cur_pend) * 100)
     # Done with all searches
     sortProgress["value"] = 100
@@ -789,9 +847,15 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                     len(sortedLines[nextPos])==2:
                 sortedLines.pop(nextPos)
             elif len(sortedLines[innerLoop])>2 and len(sortedLines[nextPos])>2:
-                # Consolidate the comments between the 2 lines
-                allComments = " ".join([sortedLines[innerLoop][2],
-                    sortedLines[nextPos][2]])
+                # Consolidate the comments between the 2 lines, min dupes
+                if sortedLines[innerLoop][2] not in sortedLines[nextPos][2] and \
+                  sortedLines[nextPos][2] not in sortedLines[innerLoop][2]:
+                    allComments = " ".join([sortedLines[innerLoop][2],
+                        sortedLines[nextPos][2]])
+                elif sortedLines[innerLoop][2] in sortedLines[nextPos][2]:
+                    allComments = sortedLines[nextPos][2]
+                elif sortedLines[nextPos][2] in sortedLines[innerLoop][2]:
+                    allComments = sortedLines[innerLoop][2]
                 sortedLines[innerLoop][2] = allComments
                 sortedLines.pop(nextPos)
         sortProgress["value"] = (55 + ((innerLoop / stopInt) * 45))
