@@ -29,6 +29,7 @@ import threading
 #    Finish backend functionality for many of the dialogs
 #       Flesh out Sort, Filter, Options dialogs (almost done)
 #       Add a Replace All function
+#       Add Goto Line # (From Filter dialog)
 #       Add file encoding option to the Options dialog
 #       Re-Find info about tkinter config files that I saw once.
 #           This will allow me to finish options dialog
@@ -506,7 +507,7 @@ def mnuEditFindFindAll(e=None):
     if (search_text):
         cur_index = "1.0"
         cur_cursor = editor_text.index(tk.INSERT)
-        cur_end = editor_text(tk.END)
+        cur_end = editor_text.index(tk.END)
         while True:
             # searches for desired string from index 1
             cur_index = editor_text.search(search_text, cur_index,
@@ -882,6 +883,15 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     if oldEnd >= newEnd:
         spinStartMax(e, newEnd)
 
+def mnuGotoLine(e=None, jmpline=""):
+    if jmpline == "":
+        pass
+    else:
+        editor_text.see(jmpline)
+        editor_text.mark_set(tk.INSERT, jmpline)
+def mnuGotoLineEvent(e=None, jmpline=""):
+    row = treeComments.selection()
+    mnuGotoLine(None, f"{row[0]}.0")
 def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
     # Variable prep:
     filterProgress["value"] = 0
@@ -913,7 +923,7 @@ def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
         filterProgress["value"] = ((innerLoop / (stopInt+1)) * 100)
     filterProgress["value"] = 100
 def mnuToolFilter(e=None):
-    global dlgToolFilter, filterProgress
+    global dlgToolFilter, filterProgress, treeComments
     dlgToolFilter = tk.Toplevel(root)
     dlgToolFilter.title("Filter Hosts")
     center_window(dlgToolFilter, 650, 450)
@@ -983,6 +993,7 @@ def mnuToolFilter(e=None):
     treeComments.tag_configure("host", font=editor_text["font"],
         foreground=editor_text["foreground"],
         background=editor_text["background"])
+    treeComments.bind("<ButtonRelease-1>", mnuGotoLineEvent)
 
     lblFilterRoot.pack(padx=10, side=tk.TOP)
     lblFilterStartLine.grid(row=0, column=0, pady=5, sticky=tk.E)
