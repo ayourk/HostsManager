@@ -91,11 +91,15 @@ def center_window(curwind, dlg_width=200, dlg_height=200, appCenter=True):
 
 # Tried to use single dispatch, but it didn't go over too well.
 # https://docs.python.org/3/library/functools.html#functools.singledispatch
-def dlgDismiss(dlgWindow=None):
+def dlgDismiss(dlgWindow=None, widget=None):
     global searchStart
     searchStart = "1.0"
-    dlgWindow.grab_release()
-    dlgWindow.destroy()
+    if widget:
+        widget.grab_release()
+        widget.destroy()
+    else:
+        dlgWindow.grab_release()
+        dlgWindow.destroy()
 def dlgDismissEvent(e=None):
     dlgDismiss(e.widget)
 
@@ -377,31 +381,31 @@ def mnuEditFind(e=None): # Used to be mnuEditReplace
     dlgEditReplace.title("Find & Replace Text...")
     center_window(dlgEditReplace, 310, 160)
     lblFind = tk.Label(dlgEditReplace, text="Find:")
-    lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
     txtFind = tk.Entry(dlgEditReplace) #, textvariable=cursel_text
-    txtFind.grid(column=1, row=0, columnspan=2, pady=10)
     lblReplace = tk.Label(dlgEditReplace, text="Replace:")
-    lblReplace.grid(column=0, row=1, padx=10, pady=5)
     txtReplace = tk.Entry(dlgEditReplace)
-    txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=tk.E)
     lblMatchCase = tk.Label(dlgEditReplace, text="Match Case:")
-    lblMatchCase.grid(column=0, row=2, padx=10, pady=5, sticky=tk.E)
     chkMatchCase = tk.Checkbutton(dlgEditReplace, variable=boolMatchCase,
         offvalue=False, onvalue=True)
     chkMatchCase.deselect() # Start out unchecked
-    chkMatchCase.grid(column=1, row=2, sticky=tk.W)
     btnReplaceFindAll = tk.Button(dlgEditReplace, text="Mark All",
         command=mnuEditFindFindAll)
-    btnReplaceFindAll.grid(column=2, row=2, sticky=tk.E)
 
     btnReplaceFind = tk.Button(dlgEditReplace, text="Find",
         command=mnuEditReplaceFind)
-    btnReplaceFind.grid(column=0, row=3)
     btnEditReplaceNext = tk.Button(dlgEditReplace, text="Replace",
         command=mnuEditReplaceNext)
-    btnEditReplaceNext.grid(column=1, row=3, pady=5, sticky=tk.W)
     btnEditReplaceCancel = tk.Button(dlgEditReplace, text="Cancel",
         command=mnuEditReplaceCancel)
+    lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
+    txtFind.grid(column=1, row=0, columnspan=2, pady=10)
+    lblReplace.grid(column=0, row=1, padx=10, pady=5)
+    txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=tk.E)
+    lblMatchCase.grid(column=0, row=2, padx=10, pady=5, sticky=tk.E)
+    chkMatchCase.grid(column=1, row=2, sticky=tk.W)
+    btnReplaceFindAll.grid(column=2, row=2, sticky=tk.E)
+    btnReplaceFind.grid(column=0, row=3)
+    btnEditReplaceNext.grid(column=1, row=3, pady=5, sticky=tk.W)
     btnEditReplaceCancel.grid(column=2, row=3, pady=5, sticky=tk.E)
 
     if cursel_text != "":
@@ -582,9 +586,9 @@ def mnuAddFromPos(e=None, insertPos=""):
             return
     else:
         mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
-def spinStartMax(e=None, maxline=-1):
+def spinMax(e=None, maxline=-1):
     e.config(to=maxline)
-def spinStopMin(e=None, minline=1):
+def spinMin(e=None, minline=1):
     e.config(from_=minline)
 def mnuToolSort(e=None):
     global dlgToolSort, spinStart, spinStop, sortProgress, btnToolSort
@@ -612,12 +616,12 @@ def mnuToolSort(e=None):
     try:
         spinStart = tk.Spinbox(lblSortRoot, increment=1,
             from_=1, to=int(stop_line.get()),
-            textvariable=start_line,
-            command=lambda:spinStopMin(spinStop, start_line.get()))
+            textvariable=start_line, justify=tk.RIGHT,
+            command=lambda:spinMin(spinStop, start_line.get()))
         spinStop = tk.Spinbox(lblSortRoot, increment=1,
             from_=int(start_line.get()), to=int(lastline),
-            textvariable=stop_line,
-            command=lambda:spinStartMax(spinStart, stop_line.get()))
+            textvariable=stop_line, justify=tk.RIGHT,
+            command=lambda:spinMax(spinStart, stop_line.get()))
     except Exception as exp:
         pass
     btnToolSortBeautify = tk.Button(lblSortRoot, text="Beautify",
@@ -733,7 +737,7 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
     if oldEnd >= newEnd:
-        spinStartMax(e, newEnd)
+        spinMax(e, newEnd)
     btnToolSort.config(state=tk.NORMAL)
 
 def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
@@ -759,10 +763,10 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
             try:
                 curLine = editor_text.get(f"{innerLoop}.0", f"{nextPos}.0")
                 nextLine = editor_text.get(f"{nextPos}.0", f"{nextPos+1}.0")
-                curList = curLine.splitlines()[0].split(" ", 3)
+                curList = curLine.splitlines()[0].split(" ", 2)
                 nextListTest = nextLine.splitlines()
                 if nextListTest: # Sometimes it is an empty list!
-                    nextList = nextLine.splitlines()[0].split(" ", 3)
+                    nextList = nextLine.splitlines()[0].split(" ", 2)
                 else:
                     break
             except Exception:
@@ -793,7 +797,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
     if oldEnd >= newEnd:
-        spinStartMax(e, newEnd)
+        spinMax(e, newEnd)
 
 def linekey(entry):
     if entry is None or len(entry) < 2:
@@ -881,15 +885,61 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
     if oldEnd >= newEnd:
-        spinStartMax(e, newEnd)
+        spinMax(e, newEnd)
 
-def mnuGotoLine(e=None, jmpline=""):
-    if jmpline == "":
+def mnuEditGotoLine(e=None):
+    global dlgEditGotoLine, spinGoto
+    dlgEditGotoLine = tk.Toplevel(root)
+    dlgEditGotoLine.title("Goto Line #")
+    center_window(dlgEditGotoLine, 240, 80)
+    # TODO:
+    start_gline = tk.IntVar()
+    start_gline.set(1)
+    lastline = int(editor_text.index(tk.END).split(".", 1)[0])
+
+    lblGotoLine = tk.Label(dlgEditGotoLine, text="Goto Line #:")
+    try:
+        spinGoto = tk.Spinbox(dlgEditGotoLine, increment=1, width=10,
+            from_=1, to=lastline,
+            textvariable=start_gline, justify=tk.RIGHT,
+            command=lambda:spinMax(spinGoto, lastline))
+    except Exception as exp:
+        pass
+    #txtGotoLine = tk.Entry(dlgEditGotoLine)
+    btnGotoLine = tk.Button(dlgEditGotoLine, text="Go",
+        command=lambda: mnuGotoLine(None, "%s.0" % spinGoto.get()))
+    lblGotoLine.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
+    #txtGotoLine.grid(column=1, row=0, pady=10, sticky=tk.W)
+    spinGoto.grid(column=1, row=0, pady=10, sticky=tk.W)
+    btnGotoLine.grid(column=1, row=2, sticky=tk.W)
+
+    #txtGotoLine.focus()
+    spinGoto.focus()
+    #dlgEditGotoLine.resizable(False, False)
+    spinGoto.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
+    dlgEditGotoLine.bind("<Return>", mnuGotoLineSpin)
+    dlgEditGotoLine.bind("<Escape>", dlgDismissEvent)
+    #dlgEditGotoLine.overrideredirect(True)
+    dlgEditGotoLine.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgEditGotoLine)) # intercept close button
+    dlgEditGotoLine.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgEditGotoLine.wait_visibility() # can't grab until window appears, so we wait
+    #dlgEditGotoLine.grab_set()        # ensure all input goes to our window
+    dlgEditGotoLine.wait_window()     # block until window is destroyed
+
+def mnuGotoLine(e=None, jumpline=""):
+    if jumpline == "":
         pass
     else:
-        editor_text.see(jmpline)
-        editor_text.mark_set(tk.INSERT, jmpline)
-def mnuGotoLineEvent(e=None, jmpline=""):
+        editor_text.see(jumpline)
+        editor_text.mark_set(tk.INSERT, jumpline)
+        editorUpdate()
+def mnuGotoLineSpin(e=None, jumpline=""):
+    global spinGoto
+    row = spinGoto.get()
+    mnuGotoLine(None, f"{row[0]}.0")
+def mnuGotoLineTree(e=None, jumpline=""):
     row = treeComments.selection()
     mnuGotoLine(None, f"{row[0]}.0")
 def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
@@ -942,12 +992,12 @@ def mnuToolFilter(e=None):
     try:
         spinFStart = tk.Spinbox(lblFilterRoot, increment=1,
             from_=1, to=int(stop_fline.get()),
-            textvariable=start_fline,
-            command=lambda:spinStopMin(spinFStop, start_fline.get()))
+            textvariable=start_fline, justify=tk.RIGHT,
+            command=lambda:spinMin(spinFStop, start_fline.get()))
         spinFStop = tk.Spinbox(lblFilterRoot, increment=1,
             from_=int(start_fline.get()), to=int(lastline),
-            textvariable=stop_fline,
-            command=lambda:spinStartMax(spinFStart, stop_fline.get()))
+            textvariable=stop_fline, justify=tk.RIGHT,
+            command=lambda:spinMax(spinFStart, stop_fline.get()))
     except Exception as exp:
         pass
     btnToolFilter = tk.Button(lblFilterRoot,
@@ -993,7 +1043,7 @@ def mnuToolFilter(e=None):
     treeComments.tag_configure("host", font=editor_text["font"],
         foreground=editor_text["foreground"],
         background=editor_text["background"])
-    treeComments.bind("<ButtonRelease-1>", mnuGotoLineEvent)
+    treeComments.bind("<ButtonRelease-1>", mnuGotoLineTree)
 
     lblFilterRoot.pack(padx=10, side=tk.TOP)
     lblFilterStartLine.grid(row=0, column=0, pady=5, sticky=tk.E)
@@ -1136,6 +1186,7 @@ def mnuDisableWhenEmpty():
     mnuEdit.entryconfig("Cut", state="disabled")
     mnuEdit.entryconfig("Copy", state="disabled")
     mnuEdit.entryconfig("Find & Replace...", state="disabled")
+    mnuEdit.entryconfig("Go To Line #", state="disabled")
     mnuTool.entryconfig("Sort/Merge Hosts", state="disabled")
     mnuTool.entryconfig("Filter Hosts", state="disabled")
 
@@ -1167,6 +1218,7 @@ def mnuEnable():
     mnuEdit.entryconfig("Cut", state="normal")
     mnuEdit.entryconfig("Copy", state="normal")
     mnuEdit.entryconfig("Find & Replace...", state="normal")
+    mnuEdit.entryconfig("Go To Line #", state="normal")
     mnuTool.entryconfig("Sort/Merge Hosts", state="normal")
     mnuTool.entryconfig("Filter Hosts", state="normal")
 
@@ -1261,6 +1313,8 @@ mnuEdit.add_command(label="Paste",
 mnuEdit.add_separator()
 mnuEdit.add_command(label="Find & Replace...",
     command=lambda: mnuEditFind(0), accelerator="(Ctrl+F)")
+mnuEdit.add_command(label="Go To Line #",
+    command=lambda: mnuEditGotoLine(0), accelerator="(Ctrl+G)")
 
 textWrap = tk.StringVar()
 textWrap.set(editor_text["wrap"])
@@ -1339,6 +1393,7 @@ root.bind("<Control-Key-x>", mnuEditCut)
 root.bind("<Control-Key-c>", mnuEditCopy)
 root.bind("<Control-Key-v>", mnuEditPaste)
 root.bind("<Control-Key-f>", mnuEditFind)
+root.bind("<Control-Key-g>", mnuEditGotoLine)
 root.bind("<Control-Key-M>", mnuToolSort)
 root.bind("<Control-Key-F>", mnuToolFilter)
 root.bind("<Button-3>", rightClickMenu)
