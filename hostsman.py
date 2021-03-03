@@ -617,6 +617,59 @@ def mnuEditReplaceCancel(e=None):
 def mnuSelectAll(e=None):
     editor_text.tag_add(tk.SEL, "1.0", tk.END)
 
+def mnuGotoLine(e=None, jumpline=""):
+    if jumpline == "":
+        pass
+    else:
+        editor_text.see(jumpline)
+        editor_text.mark_set(tk.INSERT, jumpline)
+        editorUpdate()
+def mnuGotoLineSpin(e=None, jumpline=""):
+    global spinGoto
+    row = spinGoto.get()
+    mnuGotoLine(None, f"{row[0]}.0")
+def mnuGotoLineTree(e=None, jumpline=""):
+    row = treeComments.selection()
+    mnuGotoLine(None, f"{row[0]}.0")
+def mnuEditGotoLine(e=None):
+    global dlgEditGotoLine, spinGoto
+    dlgEditGotoLine = tk.Toplevel(root)
+    dlgEditGotoLine.title("Goto Line #")
+    center_window(dlgEditGotoLine, 240, 80)
+    start_gline = tk.IntVar()
+    start_gline.set(1)
+    lastline = int(editor_text.index(tk.END).split(".", 1)[0])
+
+    lblGotoLine = tk.Label(dlgEditGotoLine, text="Goto Line #:")
+    try:
+        spinGoto = tk.Spinbox(dlgEditGotoLine, increment=1, width=10,
+            from_=1, to=lastline,
+            textvariable=start_gline, justify=tk.RIGHT,
+            command=lambda:spinMax(spinGoto, lastline))
+    except Exception as exp:
+        pass
+    btnGotoLine = tk.Button(dlgEditGotoLine, text="Go",
+        command=lambda: mnuGotoLine(None, "%s.0" % spinGoto.get()))
+    lblGotoLine.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
+    spinGoto.grid(column=1, row=0, pady=10, sticky=tk.W)
+    btnGotoLine.grid(column=1, row=2, sticky=tk.W)
+
+    spinGoto.focus()
+    dlgEditGotoLine.resizable(False, False)
+    spinGoto.bind("<Return>", mnuGotoLineSpin) # Doesn't seem to want to bind :(
+    spinGoto.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
+    btnGotoLine.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
+    dlgEditGotoLine.bind("<Return>", mnuGotoLineSpin)
+    dlgEditGotoLine.bind("<Escape>", dlgDismissEvent)
+    #dlgEditGotoLine.overrideredirect(True)
+    dlgEditGotoLine.protocol("WM_DELETE_WINDOW",
+        lambda: dlgDismiss(dlgEditGotoLine)) # intercept close button
+    dlgEditGotoLine.transient(root)   # dialog window is related to main
+    # Still need to remove min/max buttons and keep the X button
+    dlgEditGotoLine.wait_visibility() # can't grab until window appears, so we wait
+    #dlgEditGotoLine.grab_set()        # ensure all input goes to our window
+    dlgEditGotoLine.wait_window()     # block until window is destroyed
+
 def mnuAddBrowse(e=None, fileName="", insertPos=""):
     browseTitle = "Select a file to merge"
     if fileName.strip() == "":
@@ -983,59 +1036,6 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     if oldEnd >= newEnd:
         spinMax(e, newEnd)
 
-def mnuEditGotoLine(e=None):
-    global dlgEditGotoLine, spinGoto
-    dlgEditGotoLine = tk.Toplevel(root)
-    dlgEditGotoLine.title("Goto Line #")
-    center_window(dlgEditGotoLine, 240, 80)
-    start_gline = tk.IntVar()
-    start_gline.set(1)
-    lastline = int(editor_text.index(tk.END).split(".", 1)[0])
-
-    lblGotoLine = tk.Label(dlgEditGotoLine, text="Goto Line #:")
-    try:
-        spinGoto = tk.Spinbox(dlgEditGotoLine, increment=1, width=10,
-            from_=1, to=lastline,
-            textvariable=start_gline, justify=tk.RIGHT,
-            command=lambda:spinMax(spinGoto, lastline))
-    except Exception as exp:
-        pass
-    btnGotoLine = tk.Button(dlgEditGotoLine, text="Go",
-        command=lambda: mnuGotoLine(None, "%s.0" % spinGoto.get()))
-    lblGotoLine.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
-    spinGoto.grid(column=1, row=0, pady=10, sticky=tk.W)
-    btnGotoLine.grid(column=1, row=2, sticky=tk.W)
-
-    spinGoto.focus()
-    dlgEditGotoLine.resizable(False, False)
-    spinGoto.bind("<Return>", mnuGotoLineSpin) # Doesn't seem to want to bind :(
-    spinGoto.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
-    btnGotoLine.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
-    dlgEditGotoLine.bind("<Return>", mnuGotoLineSpin)
-    dlgEditGotoLine.bind("<Escape>", dlgDismissEvent)
-    #dlgEditGotoLine.overrideredirect(True)
-    dlgEditGotoLine.protocol("WM_DELETE_WINDOW",
-        lambda: dlgDismiss(dlgEditGotoLine)) # intercept close button
-    dlgEditGotoLine.transient(root)   # dialog window is related to main
-    # Still need to remove min/max buttons and keep the X button
-    dlgEditGotoLine.wait_visibility() # can't grab until window appears, so we wait
-    #dlgEditGotoLine.grab_set()        # ensure all input goes to our window
-    dlgEditGotoLine.wait_window()     # block until window is destroyed
-
-def mnuGotoLine(e=None, jumpline=""):
-    if jumpline == "":
-        pass
-    else:
-        editor_text.see(jumpline)
-        editor_text.mark_set(tk.INSERT, jumpline)
-        editorUpdate()
-def mnuGotoLineSpin(e=None, jumpline=""):
-    global spinGoto
-    row = spinGoto.get()
-    mnuGotoLine(None, f"{row[0]}.0")
-def mnuGotoLineTree(e=None, jumpline=""):
-    row = treeComments.selection()
-    mnuGotoLine(None, f"{row[0]}.0")
 def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
     # Variable prep:
     filterProgress["value"] = 0
