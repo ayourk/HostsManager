@@ -931,7 +931,9 @@ def mnuEditGotoLine(e=None):
     #txtGotoLine.focus()
     spinGoto.focus()
     #dlgEditGotoLine.resizable(False, False)
+    spinGoto.bind("<Return>", mnuGotoLineSpin) # Doesn't seem to want to bind :(
     spinGoto.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
+    btnGotoLine.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
     dlgEditGotoLine.bind("<Return>", mnuGotoLineSpin)
     dlgEditGotoLine.bind("<Escape>", dlgDismissEvent)
     #dlgEditGotoLine.overrideredirect(True)
