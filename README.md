@@ -8,11 +8,11 @@ The hostsman.py included here is a way for me to rapid prototype the C# app.  Fo
 
 Common locations for Hosts file lists:
 
-https://pgl.yoyo.org/adservers/
-https://winhelp2002.mvps.org/hosts.htm
+https://pgl.yoyo.org/adservers/<br>
+https://winhelp2002.mvps.org/hosts.htm<br>
 https://github.com/StevenBlack/hosts
 
-URLs suitable for importing into the Sort/Merge feature for the above:
-https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=1&mimetype=plaintext
-https://winhelp2002.mvps.org/hosts.txt
+URLs suitable for importing into the Sort/Merge feature for the above:<br>
+https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=1&mimetype=plaintext<br>
+https://winhelp2002.mvps.org/hosts.txt<br>
 https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-porn/hosts
