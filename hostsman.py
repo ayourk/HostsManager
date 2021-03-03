@@ -552,19 +552,31 @@ def mnuAddFromPos(e=None, insertPos=""):
     if e.get().strip() == "":
         mnuAddBrowse(e, "")
     curFile = e.get().strip()
+    merge_contents = None
     if curFile == "": # 2 chances before we abort.
         return;
+    # Handle importing from web:
+    if curFile.lower().startswith(("http://", "https://")):
+        try:
+            import urllib.request as req
+
+            resp = req.urlopen(curFile)
+            raw_bytes = resp.read().translate(None, b"\r")
+            merge_contents = raw_bytes.decode().splitlines()
+        except Exception as exp:
+            tkmessagebox.showerror("ERROR", exp)
     if insertPos == "": # Default to cursor position
         insertPos = editor_text.index(tk.INSERT)
     if txtMergeTag.get().startswith("#"):
         mergeTag = txtMergeTag.get()
         try:
-            try: # Not all files are UTF-8; This needs a better solution.
-                text_file = open(curFile, "r")
-                merge_contents = text_file.readlines()
-            except UnicodeDecodeError:
-                text_file = open(curFile, "r", encoding='ISO-8859-1')
-                merge_contents = text_file.readlines()
+            if merge_contents == None: # Did we load from URL?
+                try: # Not all files are UTF-8; This needs a better solution.
+                    text_file = open(curFile, "r")
+                    merge_contents = text_file.readlines()
+                except UnicodeDecodeError:
+                    text_file = open(curFile, "r", encoding='ISO-8859-1')
+                    merge_contents = text_file.readlines()
             for idx, curLine in enumerate(merge_contents):
                 if not curLine.endswith("\n"): curLine += "\n"
                 curListTest = curLine.splitlines()
@@ -584,6 +596,9 @@ def mnuAddFromPos(e=None, insertPos=""):
         except Exception as exp:
             tkmessagebox.showerror("ERROR", exp)
             return
+    elif merge_contents:
+        editor_text.insert(insertPos, "\n".join(merge_contents))
+        editor_text.mark_set(tk.INSERT, insertPos)
     else:
         mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
 def spinMax(e=None, maxline=-1):
