@@ -27,14 +27,11 @@ import threading
 #    Finish special dialogs related to the purpose of this app (Mostly done)
 #       Make the Minimize button disappear or nonfunctional
 #    Finish backend functionality for many of the dialogs
-#       Flesh out Sort, Filter, Options dialogs (almost done)
+#       Flesh Options dialog
 #       Add a Replace All function
-#       Add Goto Line # (From Filter dialog)
 #       Add file encoding option to the Options dialog
 #       Re-Find info about tkinter config files that I saw once.
 #           This will allow me to finish options dialog
-#    Add Line numbering feature (as an option) from:
-# https://stackoverflow.com/questions/16369470/tkinter-adding-line-number-to-text-widget
 
 root = tk.Tk()
 root.title("Hosts File Manager")
@@ -124,6 +121,67 @@ dlgToolColor = False
 dlgToolOptions = False
 dlgHelpAbout = False
 boolMatchCase = tk.BooleanVar()
+
+# Classes:
+# Line numbering feature from:
+# https://stackoverflow.com/questions/16369470/tkinter-adding-line-number-to-text-widget
+class TextLineNumbers(tk.Canvas):
+    def __init__(self, *args, **kwargs):
+        tk.Canvas.__init__(self, *args, **kwargs)
+        self.textwidget = None
+
+    def attach(self, text_widget):
+        self.textwidget = text_widget
+
+    def redraw(self, *args):
+        '''redraw line numbers'''
+        self.delete("all")
+        # Support auto resizing depending on # of lines
+        font_size = 10 # Find a way to detect current font size
+        self.lastline = int(str(self.textwidget.index(tk.END)).split(".")[0])
+        self["width"] = int(len(str(self.lastline)) * font_size)
+
+        i = self.textwidget.index("@0,0")
+        while True :
+            self.textwidget.update_idletasks()
+            dline= self.textwidget.dlineinfo(i)
+            if dline is None: break
+            y = dline[1]
+            linenum = str(i).split(".")[0]
+            self.create_text(
+                self["width"], y,
+                anchor="ne", # Prefer right justification;
+                text=linenum, justify=tk.RIGHT
+            )
+            i = self.textwidget.index("%s+1line" % i)
+
+class LinedText(tk.Text):
+    def __init__(self, *args, **kwargs):
+        tk.Text.__init__(self, *args, **kwargs)
+
+        # create a proxy for the underlying widget
+        self._orig = self._w + "_orig"
+        self.tk.call("rename", self._w, self._orig)
+        self.tk.createcommand(self._w, self._proxy)
+
+    def _proxy(self, *args):
+        # let the actual widget perform the requested action
+        cmd = (self._orig,) + args
+        result = self.tk.call(cmd)
+
+        # generate an event if something was added or deleted,
+        # or the cursor position changed
+        if (args[0] in ("insert", "replace", "delete") or
+            args[0:3] == ("mark", "set", "insert") or
+            args[0:2] == ("xview", "moveto") or
+            args[0:2] == ("xview", "scroll") or
+            args[0:2] == ("yview", "moveto") or
+            args[0:2] == ("yview", "scroll")
+        ):
+            self.event_generate("<<Change>>", when="tail")
+
+        # return what the actual widget returned
+        return result
 
 # Menu and related functions
 def mnuFileNew(e=None):
@@ -601,6 +659,8 @@ def mnuAddFromPos(e=None, insertPos=""):
         editor_text.mark_set(tk.INSERT, insertPos)
     else:
         mnuInsertFile(None, curFile, insertPos, "Add a Hosts file")
+    spinMax(spinStart, int(str(editor_text.index(tk.END)).split(".")[0]))
+    spinMax(spinStop, int(str(editor_text.index(tk.END)).split(".")[0]))
 def spinMax(e=None, maxline=-1):
     e.config(to=maxline)
 def spinMin(e=None, minline=1):
@@ -868,14 +928,10 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                 sortedLines.pop(nextPos)
             elif len(sortedLines[innerLoop])>2 and len(sortedLines[nextPos])>2:
                 # Consolidate the comments between the 2 lines, min dupes
-                if sortedLines[innerLoop][2] not in sortedLines[nextPos][2] and \
-                  sortedLines[nextPos][2] not in sortedLines[innerLoop][2]:
-                    allComments = " ".join([sortedLines[innerLoop][2],
-                        sortedLines[nextPos][2]])
-                elif sortedLines[innerLoop][2] in sortedLines[nextPos][2]:
-                    allComments = sortedLines[nextPos][2]
-                elif sortedLines[nextPos][2] in sortedLines[innerLoop][2]:
-                    allComments = sortedLines[innerLoop][2]
+                curTags = (" " + sortedLines[innerLoop][2].strip()).split(" #")
+                nextTags = (" " + sortedLines[nextPos][2].strip()).split(" #")
+                combTags = set(curTags).union(nextTags)
+                allComments = " #".join(combTags).lstrip()
                 sortedLines[innerLoop][2] = allComments
                 sortedLines.pop(nextPos)
         sortProgress["value"] = (55 + ((innerLoop / stopInt) * 45))
@@ -1263,6 +1319,7 @@ def editorUpdate(e=None):
     else:
         statusBar.config(text="Status Bar")
         mnuDisableUnReDo()
+    textline.redraw()
 
 #
 # Main editor window
@@ -1271,17 +1328,20 @@ def editorUpdate(e=None):
 editor_frame = tk.Frame(root)
 # Scroll bars should NOT be part of the tab order (takefocus=0)
 vert_scroll = tk.Scrollbar(editor_frame, takefocus=0)
-vert_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 horiz_scroll = tk.Scrollbar(editor_frame, takefocus=0, orient="horizontal")
-horiz_scroll.pack(side=tk.BOTTOM, fill=tk.X)
-editor_text = tk.Text(editor_frame, width=20, height=20,
+editor_text = LinedText(editor_frame, width=20, height=20,
     wrap="none", undo=True,
     selectbackground="yellow", # Default is Gray
     xscrollcommand=horiz_scroll.set, yscrollcommand=vert_scroll.set)
 # Default to Dark Mode
 editor_text.config(fg="white", bg="black", insertbackground="white")
+textline = TextLineNumbers(editor_frame) # Modified from original to autosize
+textline.attach(editor_text)
 
-editor_text.pack(expand=True, fill=tk.BOTH) # Last for proper AutoResize
+vert_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+horiz_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+textline.pack(side=tk.LEFT, fill=tk.Y)
+editor_text.pack(side=tk.TOP, expand=True, fill=tk.BOTH) # Last for proper AutoResize
 
 # Configure scrollbars
 vert_scroll.config(command=editor_text.yview)
@@ -1390,6 +1450,8 @@ mnuRightClick.add_command(label="Exit",
     command=lambda: mnuFileExit(0), accelerator="(Ctrl+Q)")
 
 # Any time the cursor moves in the text box, set cursor pos in the status bar:
+editor_text.bind("<<Change>>", editorUpdate)
+editor_text.bind("<Configure>", editorUpdate)
 editor_text.bind("<Activate>", editorUpdate)
 editor_text.bind("<ButtonRelease>", editorUpdate)
 editor_text.bind("<FocusIn>", editorUpdate)
