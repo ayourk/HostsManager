@@ -24,11 +24,8 @@ import threading
 #
 
 # TODO:
-#    Finish special dialogs related to the purpose of this app (Mostly done)
-#       Make the Minimize button disappear or nonfunctional
-#    Finish backend functionality for many of the dialogs
-#       Flesh Options dialog
-#       Add a Replace All function
+#    Make the Minimize button disappear or nonfunctional
+#    Flesh Options dialog
 #       Add file encoding option to the Options dialog
 #       Re-Find info about tkinter config files that I saw once.
 #           This will allow me to finish options dialog
@@ -129,15 +126,23 @@ class TextLineNumbers(tk.Canvas):
     def __init__(self, *args, **kwargs):
         tk.Canvas.__init__(self, *args, **kwargs)
         self.textwidget = None
+        # Sometimes there is a big burst of events; delay redraw during flood
+        self.boolDelayRedraw = False
 
     def attach(self, text_widget):
         self.textwidget = text_widget
 
+    # Not sure why this isn't part of this widget's update_idletasks override
     def redraw(self, *args):
         '''redraw line numbers'''
         self.delete("all")
-        # Support auto resizing depending on # of lines
-        font_size = 10 # Find a way to detect current font size
+        if self.boolDelayRedraw: return # Is an event flood on the horizon?
+        # Support auto resizing depending on # of lines & font size
+        text_font_size = str(self.textwidget["font"]).rsplit(" ", 1)
+        if len(text_font_size) > 1:
+            font_size = int(text_font_size[1])
+        else:
+            font_size = 10 # Default to 10pt font
         self.lastline = int(str(self.textwidget.index(tk.END)).split(".")[0])
         self["width"] = int(len(str(self.lastline)) * font_size)
 
@@ -149,9 +154,9 @@ class TextLineNumbers(tk.Canvas):
             y = dline[1]
             linenum = str(i).split(".")[0]
             self.create_text(
-                self["width"], y,
-                anchor="ne", # Prefer right justification;
-                text=linenum, justify=tk.RIGHT
+                self["width"], y, text=linenum,
+                anchor="ne", justify=tk.RIGHT, # Prefer right justification;
+                font=self.textwidget["font"]
             )
             i = self.textwidget.index("%s+1line" % i)
 
@@ -438,33 +443,37 @@ def mnuEditFind(e=None): # Used to be mnuEditReplace
     searchStart = "1.0"
     dlgEditReplace.title("Find & Replace Text...")
     center_window(dlgEditReplace, 310, 160)
-    lblFind = tk.Label(dlgEditReplace, text="Find:")
-    txtFind = tk.Entry(dlgEditReplace) #, textvariable=cursel_text
-    lblReplace = tk.Label(dlgEditReplace, text="Replace:")
-    txtReplace = tk.Entry(dlgEditReplace)
-    lblMatchCase = tk.Label(dlgEditReplace, text="Match Case:")
-    chkMatchCase = tk.Checkbutton(dlgEditReplace, variable=boolMatchCase,
+    lblForm = tk.Label(dlgEditReplace)
+    lblButtons = tk.Label(dlgEditReplace)
+    lblFind = tk.Label(lblForm, text="Find:")
+    txtFind = tk.Entry(lblForm) #, textvariable=cursel_text
+    lblReplace = tk.Label(lblForm, text="Replace:")
+    txtReplace = tk.Entry(lblForm)
+    lblMatchCase = tk.Label(lblForm, text="Match Case:")
+    chkMatchCase = tk.Checkbutton(lblForm, variable=boolMatchCase,
         offvalue=False, onvalue=True)
     chkMatchCase.deselect() # Start out unchecked
-    btnReplaceFindAll = tk.Button(dlgEditReplace, text="Mark All",
+    btnReplaceFindAll = tk.Button(lblForm, text="Mark All",
         command=mnuEditFindFindAll)
 
-    btnReplaceFind = tk.Button(dlgEditReplace, text="Find",
+    btnReplaceFind = tk.Button(lblButtons, text="Find",
         command=mnuEditReplaceFind)
-    btnEditReplaceNext = tk.Button(dlgEditReplace, text="Replace",
+    btnEditReplaceNext = tk.Button(lblButtons, text="Replace",
         command=mnuEditReplaceNext)
-    btnEditReplaceCancel = tk.Button(dlgEditReplace, text="Cancel",
-        command=mnuEditReplaceCancel)
+    btnEditReplaceAll = tk.Button(lblButtons, text="Replace All",
+        command=lambda: mnuEditFindFindAll(None, txtReplace.get()))
+    lblForm.pack(side=tk.TOP)
+    lblButtons.pack()
     lblFind.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
-    txtFind.grid(column=1, row=0, columnspan=2, pady=10)
-    lblReplace.grid(column=0, row=1, padx=10, pady=5)
-    txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=tk.E)
+    txtFind.grid(column=1, row=0, columnspan=2, pady=10, sticky=tk.W)
+    lblReplace.grid(column=0, row=1, padx=10, pady=5, sticky=tk.E)
+    txtReplace.grid(column=1, row=1, columnspan=2, pady=5, sticky=tk.W)
     lblMatchCase.grid(column=0, row=2, padx=10, pady=5, sticky=tk.E)
     chkMatchCase.grid(column=1, row=2, sticky=tk.W)
-    btnReplaceFindAll.grid(column=2, row=2, sticky=tk.E)
-    btnReplaceFind.grid(column=0, row=3)
-    btnEditReplaceNext.grid(column=1, row=3, pady=5, sticky=tk.W)
-    btnEditReplaceCancel.grid(column=2, row=3, pady=5, sticky=tk.E)
+    btnReplaceFindAll.grid(column=2, row=2)
+    btnReplaceFind.grid(column=0, row=0)
+    btnEditReplaceNext.grid(column=1, row=0, padx=10, pady=5)
+    btnEditReplaceAll.grid(column=2, row=0, pady=5)
 
     if cursel_text != "":
         #txtFind.insert(0, cursel_text)
@@ -561,7 +570,7 @@ def mnuEditReplaceNext(e=None):
     else: # Search empty so start from the top
         searchStart = "1.0"
         txtFind.focus_set()
-def mnuEditFindFindAll(e=None):
+def mnuEditFindFindAll(e=None, replace_text=""):
     global dlgEditReplace, txtFind
     # remove tag "found" from index 1 to tk.END
     editor_text.tag_remove("found", "1.0", tk.END)
@@ -570,7 +579,10 @@ def mnuEditFindFindAll(e=None):
         cur_index = "1.0"
         cur_cursor = editor_text.index(tk.INSERT)
         cur_end = editor_text.index(tk.END)
+        textline.boolDelayRedraw = True
         while True:
+            editor_text.see(cur_index) # Move found text into view
+            root.update_idletasks()
             # searches for desired string from index 1
             cur_index = editor_text.search(search_text, cur_index,
                 nocase=boolMatchCase, stopindex=tk.END)
@@ -578,8 +590,13 @@ def mnuEditFindFindAll(e=None):
             editor_text.see(cur_index)
             # last index sum of current index and length of editor_text
             next_index = "% s+% dc" % (cur_index, len(search_text))
-            # overwrite "Found" at cur_index
-            editor_text.tag_add("found", cur_index, next_index)
+            if replace_text != "":
+                editor_text.delete(cur_index, next_index)
+                editor_text.insert(cur_index, replace_text)
+                next_index = "% s+% dc" % (cur_index, len(replace_text))
+            else:
+                # overwrite "Found" at cur_index
+                editor_text.tag_add("found", cur_index, next_index)
             # Move cursor to end of text
             editor_text.mark_set(tk.INSERT, next_index)
             cur_index = next_index
@@ -587,6 +604,7 @@ def mnuEditFindFindAll(e=None):
         editor_text.tag_config("found",
             foreground=editor_text["selectforeground"],
             background=editor_text["selectbackground"])
+    textline.boolDelayRedraw = False
     txtFind.select_range(0, tk.END)
     txtFind.focus_set()
     editor_text.focus_set()
@@ -627,6 +645,7 @@ def mnuAddFromPos(e=None, insertPos=""):
         insertPos = editor_text.index(tk.INSERT)
     if txtMergeTag.get().startswith("#"):
         mergeTag = txtMergeTag.get()
+        textline.boolDelayRedraw = True
         try:
             if merge_contents == None: # Did we load from URL?
                 try: # Not all files are UTF-8; This needs a better solution.
@@ -654,6 +673,7 @@ def mnuAddFromPos(e=None, insertPos=""):
         except Exception as exp:
             tkmessagebox.showerror("ERROR", exp)
             return
+        textline.boolDelayRedraw = False
     elif merge_contents:
         editor_text.insert(insertPos, "\n".join(merge_contents))
         editor_text.mark_set(tk.INSERT, insertPos)
@@ -781,6 +801,7 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
     cur_pindex = Decimal(start_index)
     cur_pend = Decimal(end_index)
     combined_regexp = r"[ \t][ \t]+|^[ \t]]+|[ \t]+$|^\#.*$|^\r?\n"
+    textline.boolDelayRedraw = True
     while Decimal(cur_index) <= Decimal(cur_end):
         dlgToolSort.update_idletasks()
         root.update_idletasks()
@@ -806,6 +827,7 @@ def hostsBeautify(e=None, start_index="1.0", end_index=tk.END):
         editor_text.see(cur_index)
         sortProgress["value"] = (Decimal(cur_pindex) / Decimal(cur_pend) * 100)
     # Done with all searches
+    textline.boolDelayRedraw = False
     sortProgress["value"] = 100
     editor_text.see(tk.INSERT)
     # If the amount of lines change, we have a new EOF/max lines
@@ -824,7 +846,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
     if (startInt >= stopInt):
         return # Not enough lines to sort ( >= 3+ )
     # Time to do the actual sort:
-    #for outerLoop in range(startInt, stopInt):
+    textline.boolDelayRedraw = True
     for outerLoop in range(startInt, startInt+max_passes):
         lineSwap = False # Prepare to short circuit sorting
         statusBar.config(
@@ -868,6 +890,7 @@ def bubbleSort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
                     editor_text.insert(f"{innerLoop}.0", curLine)
         if not lineSwap: # If already sorted, skip further iterations.
             break
+    textline.boolDelayRedraw = False
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
@@ -889,6 +912,7 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
         return # Not enough lines to sort ( >= 3+ )
     list2sort = [None] * (stopInt+1)
     # Read all of the lines into lists:
+    textline.boolDelayRedraw = True
     for innerLoop in range(startInt, stopInt+1):
         dlgToolSort.update_idletasks()
         nextPos = innerLoop + 1
@@ -952,6 +976,7 @@ def mypySort(e=None, start_index="1.0", end_index=tk.END, max_passes=20):
         editor_text.insert(start_index, "\n" + "\n".join(sortedList))
     sortProgress["value"] = 100
     dlgToolSort.update_idletasks()
+    textline.boolDelayRedraw = False
     # If the amount of lines change, we have a new EOF/max lines
     oldEnd = int(math.floor(Decimal(end_index)))
     newEnd = int(math.floor(Decimal(editor_text.index(tk.END))))
@@ -963,7 +988,6 @@ def mnuEditGotoLine(e=None):
     dlgEditGotoLine = tk.Toplevel(root)
     dlgEditGotoLine.title("Goto Line #")
     center_window(dlgEditGotoLine, 240, 80)
-    # TODO:
     start_gline = tk.IntVar()
     start_gline.set(1)
     lastline = int(editor_text.index(tk.END).split(".", 1)[0])
@@ -976,17 +1000,14 @@ def mnuEditGotoLine(e=None):
             command=lambda:spinMax(spinGoto, lastline))
     except Exception as exp:
         pass
-    #txtGotoLine = tk.Entry(dlgEditGotoLine)
     btnGotoLine = tk.Button(dlgEditGotoLine, text="Go",
         command=lambda: mnuGotoLine(None, "%s.0" % spinGoto.get()))
     lblGotoLine.grid(column=0, row=0, padx=10, pady=10, sticky=tk.E)
-    #txtGotoLine.grid(column=1, row=0, pady=10, sticky=tk.W)
     spinGoto.grid(column=1, row=0, pady=10, sticky=tk.W)
     btnGotoLine.grid(column=1, row=2, sticky=tk.W)
 
-    #txtGotoLine.focus()
     spinGoto.focus()
-    #dlgEditGotoLine.resizable(False, False)
+    dlgEditGotoLine.resizable(False, False)
     spinGoto.bind("<Return>", mnuGotoLineSpin) # Doesn't seem to want to bind :(
     spinGoto.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
     btnGotoLine.bind("<Escape>", lambda x: dlgDismiss(x, dlgEditGotoLine))
@@ -1026,6 +1047,7 @@ def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
     for record in e.get_children():
         e.delete(record)
     # Read all of the lines into the Treeview:
+    textline.boolDelayRedraw = True
     for innerLoop in range(startInt, stopInt+1):
         dlgToolFilter.update_idletasks()
         nextPos = innerLoop + 1
@@ -1044,6 +1066,7 @@ def mnuToolFilterComments(e=None, start_index="1.0", end_index=tk.END):
             e.insert(parent="", index="end",
                 iid=innerLoop, text=innerLoop, values=tuple(curList))
         filterProgress["value"] = ((innerLoop / (stopInt+1)) * 100)
+    textline.boolDelayRedraw = False
     filterProgress["value"] = 100
 def mnuToolFilter(e=None):
     global dlgToolFilter, filterProgress, treeComments
@@ -1150,12 +1173,14 @@ def mnuToolWrapSet(curwrap):
 def fontChanged(curfont):
     # Font info:  .metrics("fixed") == 1 - Fixed with fonts only
     editor_text.config(font=curfont)
+    # Should I adjust the fonts of all of the other widgets too?
+
 def mnuToolFont(e=None):
     # Tkinter has not yet added a convenient way to use this font dialog,
     # so I have to use the Tcl API directly. You can see the latest work
     # towards a proper Python API and download code at [Issue#28694].
     # On MacOS, if you don't provide a font via the font configuration option,
-    # your callbacks won't be invoked so always provide an initial font
+    # your callbacks won't be invoked so always provide an initial font!
     curfont = editor_text["font"]
     dlgToolFont = root.tk.call("tk", "fontchooser", "configure",
         "-font", f"{curfont} 10", "-command", root.register(fontChanged))
@@ -1319,7 +1344,8 @@ def editorUpdate(e=None):
     else:
         statusBar.config(text="Status Bar")
         mnuDisableUnReDo()
-    textline.redraw()
+    if not textline.boolDelayRedraw:
+        textline.redraw()
 
 #
 # Main editor window
