@@ -16,3 +16,5 @@ URLs suitable for importing into the Sort/Merge feature for the above:<br>
 https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=1&mimetype=plaintext<br>
 https://winhelp2002.mvps.org/hosts.txt<br>
 https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-porn/hosts
+
+This program allows you to import, merge, and sort different sources of HOSTS lists and trim out duplicates.  This program is a text editor first and HOSTS file manager second.  There may still be a few bugs but I use this app without issue for my needs.
