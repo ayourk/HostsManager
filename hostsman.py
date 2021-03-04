@@ -779,7 +779,7 @@ def mnuToolSort(e=None):
         command=lambda: threading.Thread(mypySort(
         spinStop, "%s.0" % (spinStart.get()), "%s.0" % (spinStop.get())
         )).start())
-    lblMergeTag = tk.Label(lblSortRoot, text="Merge tag:")
+    lblMergeTag = tk.Label(lblSortRoot, text="Merge tag:  (Ex: #[...])")
     txtMergeTag = tk.Entry(lblSortRoot)
 
     lblMergeRoot = tk.Label(dlgToolSort)
@@ -1244,6 +1244,8 @@ def mnuToolColor(e=None):
     dlgToolColor.wait_window()     # block until window is destroyed
 
 def mnuToolOptions(e=None):
+    # Disable options dialog for now...
+    return
     global dlgToolOptions
     dlgToolOptions = tk.Toplevel(root)
     dlgToolOptions.title("Editor Options")
